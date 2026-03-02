@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Timebox
 
-## Getting Started
+A minimal timeboxing web application focused on structured time management.
 
-First, run the development server:
+No registration required. Completely free to use.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+🇯🇵 [日本語版はこちら](README_JA.md)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🔗 Live Demo
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+https://isikoro1.github.io/timebox/
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🧭 Concept
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Inspired by the timeboxing method popularized by Elon Musk,  
+this tool is designed to enforce focused work sessions.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Time is normalized in **15-minute blocks**.
 
-## Deploy on Vercel
+- 1 block = 15 minutes
+- Drag & resize snaps to 15-minute intervals
+- Tasks can be rescheduled to later slots if unfinished
+- Visual current-time indicator
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The goal is to maximize focus through strict time boundaries.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## ✨ Features
+
+- Weekly / 3-day view toggle
+- Double-click to create events
+- Drag to move (time & day)
+- Resize by dragging edges (15-min snapping)
+- Current time indicator
+- Event detail editing
+- URL link support
+- Alarm (works while tab is open)
+
+---
+
+## 🏗 Architecture
+
+### Serverless Design
+
+- No authentication
+- No database
+- Fully static export
+- Data stored in browser `localStorage`
+
+Deployed via GitHub Pages.
+
+---
+
+### Time Management Logic
+
+- Time stored internally in minutes
+- UI normalized to 15-minute snapping
+- Drag position → minute conversion → state normalization
+
+---
+
+## 🛠 Tech Stack
+
+- Next.js (App Router)
+- TypeScript
+- Tailwind CSS
+- Static Export (`output: "export"`)
+- GitHub Pages
+
+---
+
+## 🚀 Future Improvements
+
+- JSON Export / Import
+- 5-minute mode
+- 25-minute (Pomodoro) mode
+- Adjustable zoom levels
+- Day-only view
+- Alarm precision improvements
+- OSS support (issues & contributions)
+
+---
+
+## 📄 License
+
+MIT
