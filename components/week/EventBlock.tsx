@@ -137,7 +137,7 @@ export function EventBlock({
             onMoveEvent(item.id, { dayIndex: nextDayIndex, startMin: nextStart, endMin: nextEnd })
         }
 
-        const up = (ev: PointerEvent) => {
+        const up = () => {
             window.removeEventListener("pointermove", move)
             window.removeEventListener("pointerup", up)
 
@@ -155,26 +155,41 @@ export function EventBlock({
     return (
         <div
             className={`absolute rounded border px-2 py-1 shadow-sm overflow-hidden
-            ${selected ? "border-gray-900 bg-gray-100" : "border-gray-200 bg-gray-50"}
-            cursor-grab active:cursor-grabbing`}
+            ${selected ? "border-blue-400 bg-blue-200" : "border-blue-200 bg-blue-50 hover:bg-blue-100 hover:shadow-sm"}
+            cursor-grab active:cursor-grabbing touch-none`}
             style={{ top, height, ...widthStyle }}
             onPointerDown={onPointerDown}
             title={`${startTxt}–${endTxt}`}
-            data-eventblock="1"
+
         >
-            {/* resize handles（上/下端をドラッグ） */}
+            {/* 左右ドラッググリップ（当たり判定は広く、見た目は細く） */}
             <div
-                className="absolute left-0 right-0 top-0 h-2 cursor-ns-resize"
+                className="absolute left-0 top-0 bottom-0 w-4 z-20 cursor-grab"
+                onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e) }}
+                title="drag"
+            />
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-400/60" />
+            <div
+                className="absolute right-0 top-0 bottom-0 w-4 z-20 cursor-grab"
+                onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e) }}
+                title="drag"
+            >
+                <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-blue-400/60" />
+            </div>
+
+            {/* リサイズハンドル（左右端を避けて、角はドラッグ優先にする） */}
+            <div
+                className="absolute left-4 right-4 top-0 h-2 z-10 cursor-ns-resize"
                 onPointerDown={startResize("top")}
                 title="resize start"
             />
             <div
-                className="absolute left-0 right-0 bottom-0 h-2 cursor-ns-resize"
+                className="absolute left-4 right-4 bottom-0 h-2 z-10 cursor-ns-resize"
                 onPointerDown={startResize("bottom")}
                 title="resize end"
             />
 
-            <div className="font-medium text-gray-900 truncate text-xs">{item.label || "（未入力）"}</div>{(() => {
+            {(() => {
                 const firstUrl = (item.urls ?? []).find((u) => {
                     try {
                         const parsed = new URL(u)
@@ -189,6 +204,7 @@ export function EventBlock({
                         <div className="flex-1 font-medium text-gray-900 truncate text-xs">
                             {item.label || "（未入力）"}
                         </div>
+
                         {firstUrl ? (
                             <a
                                 href={firstUrl}

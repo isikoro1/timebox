@@ -1,5 +1,4 @@
-// items の読み込み/保存（localStorage）
-//CRUD（add/update/delete）"use client"
+"use client"
 
 import { useEffect, useState } from "react"
 import { safeParse } from "../lib/storage"
@@ -9,9 +8,10 @@ export function useTimeboxingItems(storageKey: string) {
     const [items, setItems] = useState<EventItem[]>([])
     const [loaded, setLoaded] = useState(false)
 
-    // load once
+    // load once (client only)
     useEffect(() => {
         const saved = safeParse<EventItem[]>(localStorage.getItem(storageKey))
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         if (saved) setItems(saved)
         setLoaded(true)
     }, [storageKey])
