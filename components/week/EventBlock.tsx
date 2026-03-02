@@ -137,7 +137,7 @@ export function EventBlock({
             onMoveEvent(item.id, { dayIndex: nextDayIndex, startMin: nextStart, endMin: nextEnd })
         }
 
-        const up = (ev: PointerEvent) => {
+        const up = () => {
             window.removeEventListener("pointermove", move)
             window.removeEventListener("pointerup", up)
 

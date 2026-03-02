@@ -61,7 +61,7 @@ export default function Home() {
       const el = document.activeElement as HTMLElement | null
       if (!el) return false
       const tag = el.tagName?.toLowerCase()
-      return tag === "input" || tag === "textarea" || (el as any).isContentEditable
+      return tag === "input" || tag === "textarea" || el.isContentEditable
     }
 
     const onKeyDown = (e: KeyboardEvent) => {

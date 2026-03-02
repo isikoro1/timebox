@@ -75,7 +75,7 @@ export function useAlarm({ items, enabled, leadMin }: Options) {
 
     const playBeep = () => {
         try {
-            const AudioCtx = (window.AudioContext || (window as any).webkitAudioContext) as
+            const AudioCtx = (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) as
                 | typeof AudioContext
                 | undefined
             if (!AudioCtx) return
