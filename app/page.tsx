@@ -195,12 +195,12 @@ export default function Home() {
               通知許可
             </button>
 
-            <button
+            {/* <button
               className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
               onClick={() => alarm.testBeep()}
             >
               テスト音
-            </button>
+            </button> */}
 
             {viewMode === "3days" ? (
               <div className="flex items-center gap-2">
