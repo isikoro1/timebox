@@ -143,7 +143,7 @@ export default function Home() {
     <main className="min-h-screen bg-gray-50 text-gray-900">
       <div className="mx-auto max-w-7xl p-4">
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold">Timebox</div>
+          <div className="text-lg font-semibold">Timebox(タイムボクシング用スケジュールアプリ)</div>
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
