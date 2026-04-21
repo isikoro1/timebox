@@ -34,6 +34,7 @@ export function EventBlock({
 
     const top = (visibleTopMin - viewStartMin) * pxPerMin
     const height = Math.max((visibleBottomMin - visibleTopMin) * pxPerMin, 18)
+    const isShortBlock = height <= 20
 
     const startTxt = minToHHMM(item.startMin)
     const endTxt = minToHHMM(item.endMin)
@@ -154,9 +155,10 @@ export function EventBlock({
 
     return (
         <div
-            className={`absolute rounded border px-2 py-1 shadow-sm overflow-hidden
+            className={`absolute rounded border px-2 shadow-sm overflow-hidden
             ${selected ? "border-blue-400 bg-blue-200" : "border-blue-200 bg-blue-50 hover:bg-blue-100 hover:shadow-sm"}
             cursor-grab active:cursor-grabbing touch-none`}
+            data-eventblock="1"
             style={{ top, height, ...widthStyle }}
             onPointerDown={onPointerDown}
             title={`${startTxt}–${endTxt}`}
@@ -200,8 +202,12 @@ export function EventBlock({
                 })
 
                 return (
-                    <div className="flex items-start gap-1">
-                        <div className="flex-1 font-medium text-gray-900 truncate text-xs">
+                    <div
+                        className={`flex gap-1 ${isShortBlock ? "h-full items-center py-0.5" : "items-start py-1"}`}
+                    >
+                        <div
+                            className={`flex-1 truncate font-medium text-gray-900 text-xs ${isShortBlock ? "leading-none" : "leading-4"}`}
+                        >
                             {item.label || "（未入力）"}
                         </div>
 
