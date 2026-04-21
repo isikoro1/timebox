@@ -71,14 +71,6 @@ export function DayColumn({
                 )
             })}
 
-            {nowMin >= viewStartMin && nowMin <= viewEndMin && (
-                <div
-                    className="absolute left-0 right-0 border-t-2 border-red-500"
-                    style={{ top: (nowMin - viewStartMin) * pxPerMin }}
-                    title={`now ${minToHHMM(nowMin)}`}
-                />
-            )}
-
             {items.map((it) => (
                 <EventBlock
                     key={it.id}
@@ -94,6 +86,15 @@ export function DayColumn({
                     onSelectEvent={onSelectEvent}
                 />
             ))}
+
+            {nowMin >= viewStartMin && nowMin <= viewEndMin && (
+                <div
+                    className="pointer-events-none absolute left-0 right-0 z-30 border-t-2 border-red-500"
+                    style={{ top: (nowMin - viewStartMin) * pxPerMin }}
+                    title={`now ${minToHHMM(nowMin)}`}
+                    aria-hidden="true"
+                />
+            )}
         </div>
     )
 }
