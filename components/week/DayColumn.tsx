@@ -32,7 +32,7 @@ export function DayColumn({
     pxPerMin: number
     gridMin: number
     defaultDurationMin: number
-    nowMin: number
+    nowMin: number | null
     viewStartMin: number
     viewEndMin: number
     heightPx: number
@@ -71,7 +71,7 @@ export function DayColumn({
                 )
             })}
 
-            {nowMin >= viewStartMin && nowMin <= viewEndMin && (
+            {nowMin !== null && nowMin >= viewStartMin && nowMin <= viewEndMin && (
                 <div
                     className="absolute left-0 right-0 border-t-2 border-red-500"
                     style={{ top: (nowMin - viewStartMin) * pxPerMin }}

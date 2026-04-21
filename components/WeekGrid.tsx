@@ -94,7 +94,7 @@ export function WeekGrid({
     pxPerMin: number
     gridMin: number
     defaultDurationMin: number
-    nowMin: number
+    nowMin: number | null
     viewStartMin: number
     viewEndMin: number
     visibleDays: number[]

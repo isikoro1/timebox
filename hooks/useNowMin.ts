@@ -3,10 +3,7 @@
 import { useEffect, useState } from "react"
 
 export function useNowMin(intervalMs: number = 15000) {
-    const [nowMin, setNowMin] = useState<number>(() => {
-        const d = new Date()
-        return d.getHours() * 60 + d.getMinutes()
-    })
+    const [nowMin, setNowMin] = useState<number | null>(null)
 
     useEffect(() => {
         const tick = () => {
