@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react"
 
 export type AlarmEvent = {
     id: string
@@ -13,49 +13,31 @@ export type AlarmEvent = {
 type Options = {
     items: AlarmEvent[]
     enabled: boolean
-    leadMin: number // 0なら開始時刻ぴったり。5なら5分前通知
+    leadMin: number // 0 means fire at the event start time.
 }
 
-/**
- * 前提：
- * - タブは開いている
- * - 非アクティブでも鳴らしたい（= 通知 + 音）
- * 方針：
- * - 「次に来る今日のイベント」だけを監視（まず勝ち筋を作る）
- * - setTimeoutでスケジュール + 15秒ポーリングで取りこぼし防止
- */
+type ScheduledAlarmEvent = AlarmEvent & {
+    alarmMin: number
+    targetMs: number
+    fireKey: string
+}
+
+const CHECK_INTERVAL_MS = 15_000
+const DUE_GRACE_MS = 90_000
+
 export function useAlarm({ items, enabled, leadMin }: Options) {
     const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean>(
         typeof Notification !== "undefined" && Notification.permission === "granted"
     )
+    const [nowMs, setNowMs] = useState(() => Date.now())
 
-    const firedRef = useRef<Map<string, number>>(new Map()) // id -> lastFiredAt(epoch ms)
+    const firedRef = useRef<Set<string>>(new Set())
     const timeoutRef = useRef<number | null>(null)
-
-    const todayIndex = useMemo(() => {
-        // JS: 0=Sun..6=Sat → Mon=0..Sun=6 に変換
-        const js = new Date().getDay()
-        return (js + 6) % 7
-    }, [])
-
-    const nowMin = useMemo(() => {
-        const d = new Date()
-        return d.getHours() * 60 + d.getMinutes()
-    }, [])
+    const audioCtxRef = useRef<AudioContext | null>(null)
 
     const nextToday = useMemo(() => {
-        const target = items
-            .filter((x) => x.dayIndex === todayIndex)
-            .map((x) => ({
-                ...x,
-                alarmMin: Math.max(0, x.startMin - leadMin),
-            }))
-            .filter((x) => x.alarmMin >= 0 && x.alarmMin <= 1440)
-            .filter((x) => x.alarmMin >= nowMin) // 未来だけ
-            .sort((a, b) => a.alarmMin - b.alarmMin)[0]
-
-        return target ?? null
-    }, [items, todayIndex, leadMin, nowMin])
+        return getTodaySchedule(items, leadMin, nowMs).find((ev) => ev.targetMs >= nowMs) ?? null
+    }, [items, leadMin, nowMs])
 
     const requestNotificationPermission = async () => {
         if (typeof Notification === "undefined") return false
@@ -73,13 +55,23 @@ export function useAlarm({ items, enabled, leadMin }: Options) {
         return ok
     }
 
-    const playBeep = () => {
+    const primeAudio = async () => {
+        const ctx = getAudioContext(audioCtxRef)
+        if (!ctx) return false
+        if (ctx.state === "suspended") {
+            await ctx.resume()
+        }
+        return ctx.state === "running"
+    }
+
+    const playBeep = async () => {
         try {
-            const AudioCtx = (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) as
-                | typeof AudioContext
-                | undefined
-            if (!AudioCtx) return
-            const ctx = new AudioCtx()
+            const ctx = getAudioContext(audioCtxRef)
+            if (!ctx) return
+            if (ctx.state === "suspended") {
+                await ctx.resume()
+            }
+
             const osc = ctx.createOscillator()
             const gain = ctx.createGain()
             osc.type = "sine"
@@ -88,22 +80,19 @@ export function useAlarm({ items, enabled, leadMin }: Options) {
             osc.connect(gain)
             gain.connect(ctx.destination)
             osc.start()
-            // 200ms * 3回（簡易）
-            setTimeout(() => gain.gain.setValueAtTime(0.0, ctx.currentTime), 200)
-            setTimeout(() => {
-                gain.gain.setValueAtTime(0.06, ctx.currentTime)
-            }, 350)
-            setTimeout(() => gain.gain.setValueAtTime(0.0, ctx.currentTime), 550)
-            setTimeout(() => {
-                gain.gain.setValueAtTime(0.06, ctx.currentTime)
-            }, 700)
-            setTimeout(() => gain.gain.setValueAtTime(0.0, ctx.currentTime), 900)
-            setTimeout(() => {
+
+            window.setTimeout(() => gain.gain.setValueAtTime(0, ctx.currentTime), 200)
+            window.setTimeout(() => gain.gain.setValueAtTime(0.06, ctx.currentTime), 350)
+            window.setTimeout(() => gain.gain.setValueAtTime(0, ctx.currentTime), 550)
+            window.setTimeout(() => gain.gain.setValueAtTime(0.06, ctx.currentTime), 700)
+            window.setTimeout(() => gain.gain.setValueAtTime(0, ctx.currentTime), 900)
+            window.setTimeout(() => {
                 osc.stop()
-                ctx.close()
+                osc.disconnect()
+                gain.disconnect()
             }, 1000)
         } catch {
-            // no-op
+            // Browser autoplay policies can still reject audio in some contexts.
         }
     }
 
@@ -117,56 +106,63 @@ export function useAlarm({ items, enabled, leadMin }: Options) {
         }
     }
 
-    const shouldFire = (ev: { id: string }, atEpoch: number) => {
-        const last = firedRef.current.get(ev.id)
-        // 同じIDの連続発火を防ぐ（60秒以内は抑止）
-        if (last && atEpoch - last < 60_000) return false
-        firedRef.current.set(ev.id, atEpoch)
-        return true
-    }
-
-    const checkAndFire = () => {
-        if (!enabled) return
-        const ev = nextToday
-        if (!ev) return
-
-        const d = new Date()
-        const curMin = d.getHours() * 60 + d.getMinutes()
-
-        // “今がアラーム分” か、タイマー遅延で “過ぎた直後” を拾う
-        if (curMin < ev.alarmMin) return
-        if (curMin > ev.alarmMin + 1) {
-            // 1分以上遅れている場合は一旦スキップ（過去の通知を乱発しない）
-            return
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                window.clearTimeout(timeoutRef.current)
+                timeoutRef.current = null
+            }
+            void audioCtxRef.current?.close()
+            audioCtxRef.current = null
         }
+    }, [])
 
-        const now = Date.now()
-        if (!shouldFire(ev, now)) return
-
-        playBeep()
-        notify("Timebox", `${ev.label} (${pad(ev.startMin)}–${pad(ev.endMin)})`)
-    }
-
-    // スケジュール + ポーリング
     useEffect(() => {
         if (timeoutRef.current) {
             window.clearTimeout(timeoutRef.current)
             timeoutRef.current = null
         }
         if (!enabled) return
-        if (!nextToday) return
 
-        const d = new Date()
-        const curMin = d.getHours() * 60 + d.getMinutes()
-        const msToTarget = Math.max(0, (nextToday.alarmMin - curMin) * 60_000)
+        const checkAndFire = () => {
+            const currentMs = Date.now()
+            setNowMs(currentMs)
 
-        timeoutRef.current = window.setTimeout(() => {
-            checkAndFire()
-        }, msToTarget)
+            const dueEvents = getTodaySchedule(items, leadMin, currentMs).filter(
+                (ev) => currentMs >= ev.targetMs && currentMs <= ev.targetMs + DUE_GRACE_MS
+            )
+
+            for (const ev of dueEvents) {
+                if (firedRef.current.has(ev.fireKey)) continue
+                firedRef.current.add(ev.fireKey)
+                void playBeep()
+                notify("Timebox", `${ev.label} (${pad(ev.startMin)}-${pad(ev.endMin)})`)
+            }
+        }
+
+        const scheduleNextTimeout = () => {
+            if (timeoutRef.current) {
+                window.clearTimeout(timeoutRef.current)
+                timeoutRef.current = null
+            }
+
+            const currentMs = Date.now()
+            const next = getTodaySchedule(items, leadMin, currentMs).find((ev) => ev.targetMs > currentMs)
+            if (!next) return
+
+            timeoutRef.current = window.setTimeout(() => {
+                checkAndFire()
+                scheduleNextTimeout()
+            }, Math.max(0, next.targetMs - currentMs))
+        }
+
+        checkAndFire()
+        scheduleNextTimeout()
 
         const interval = window.setInterval(() => {
             checkAndFire()
-        }, 15_000)
+            scheduleNextTimeout()
+        }, CHECK_INTERVAL_MS)
 
         return () => {
             if (timeoutRef.current) {
@@ -175,15 +171,56 @@ export function useAlarm({ items, enabled, leadMin }: Options) {
             }
             window.clearInterval(interval)
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [enabled, nextToday?.id, nextToday?.alarmMin, leadMin])
+    }, [enabled, items, leadMin])
 
     return {
-        nextToday, // UIに「次に鳴る予定」を出すのに便利
+        nextToday,
         hasNotificationPermission,
         requestNotificationPermission,
+        primeAudio,
         testBeep: playBeep,
     }
+}
+
+function getAudioContext(audioCtxRef: MutableRefObject<AudioContext | null>) {
+    if (typeof window === "undefined") return null
+    if (audioCtxRef.current) return audioCtxRef.current
+
+    const AudioCtx = (window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext) as
+        | typeof AudioContext
+        | undefined
+
+    if (!AudioCtx) return null
+    audioCtxRef.current = new AudioCtx()
+    return audioCtxRef.current
+}
+
+function getTodaySchedule(items: AlarmEvent[], leadMin: number, nowMs: number): ScheduledAlarmEvent[] {
+    const now = new Date(nowMs)
+    const todayIndex = getMonBasedDayIndex(now)
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
+    const dayKey = `${startOfToday.getFullYear()}-${pad(startOfToday.getMonth() + 1)}-${pad(startOfToday.getDate())}`
+
+    return items
+        .filter((x) => x.dayIndex === todayIndex)
+        .map((x) => {
+            const alarmMin = Math.max(0, x.startMin - leadMin)
+            return {
+                ...x,
+                alarmMin,
+                targetMs: startOfToday.getTime() + alarmMin * 60_000,
+                fireKey: `${dayKey}:${x.id}:${alarmMin}:${x.startMin}:${x.endMin}`,
+            }
+        })
+        .filter((x) => x.alarmMin >= 0 && x.alarmMin <= 1440)
+        .sort((a, b) => a.targetMs - b.targetMs)
+}
+
+function getMonBasedDayIndex(date: Date) {
+    const js = date.getDay() // 0=Sun..6=Sat
+    return (js + 6) % 7 // Mon=0..Sun=6
 }
 
 function pad(min: number) {
