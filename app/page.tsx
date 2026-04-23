@@ -1,286 +1,395 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
-import { useAlarm } from "../hooks/useAlarm"
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { QuickAddModal, type QuickAddState } from "../components/QuickAddModal"
 import { EventDetailsPopover } from "../components/EventDetailsPopover"
 import { type EventItem, WeekGrid } from "../components/WeekGrid"
-import { useTimeboxingItems } from "../hooks/useTimeboxingItems"
+import { useAlarm } from "../hooks/useAlarm"
 import { useNowMin } from "../hooks/useNowMin"
-import { useViewOptions } from "../hooks/useViewOptions"
 import { useSelection } from "../hooks/useSelection"
+import { useTimeboxingItems } from "../hooks/useTimeboxingItems"
+import { type ViewMode, type ZoomLevel, useViewOptions } from "../hooks/useViewOptions"
+import { parseEventItems } from "../lib/storage"
 
 const STORAGE_KEY = "timeboxing-tool:v1:week-items"
 const GRID_MIN = 15
 const DEFAULT_DURATION = 30
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const VIEW_MODE_LABELS: Record<ViewMode, string> = {
+    day: "1 day",
+    "3days": "3 days",
+    week: "Week",
+}
+const ZOOM_OPTIONS: ZoomLevel[] = [100, 150, 200]
+const BUTTON_CLASS =
+    "rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+const ACTIVE_BUTTON_CLASS =
+    "rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+
+function buildExportFilename() {
+    const stamp = new Date().toISOString().slice(0, 10)
+    return `timebox-events-${stamp}.json`
+}
+
+function downloadJson(items: EventItem[]) {
+    const blob = new Blob([JSON.stringify(items, null, 2)], {
+        type: "application/json",
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = buildExportFilename()
+    anchor.click()
+    URL.revokeObjectURL(url)
+}
 
 export default function Home() {
-  const { items, setItems } = useTimeboxingItems(STORAGE_KEY)
-  const nowMin = useNowMin(15000)
-  const [alarmEnabled, setAlarmEnabled] = useState(false)
-  const [alarmLeadMin, setAlarmLeadMin] = useState(0) // 0=開始ぴったり
+    const { items, setItems, loaded } = useTimeboxingItems(STORAGE_KEY)
+    const nowMin = useNowMin(15000)
+    const [alarmEnabled, setAlarmEnabled] = useState(false)
+    const [alarmLeadMin, setAlarmLeadMin] = useState(0)
+    const [transferMessage, setTransferMessage] = useState<string | null>(null)
+    const [transferState, setTransferState] = useState<"success" | "error" | null>(null)
 
-  const {
-    compact,
-    setCompact,
-    startAtMidnight,
-    setStartAtMidnight,
-    viewMode,
-    setViewMode,
-    visibleDays,
-    shiftCenter,
-    goToday,
-    pxPerMin,
-    viewStartMin,
-    viewEndMin,
-  } = useViewOptions()
+    const {
+        startAtMidnight,
+        setStartAtMidnight,
+        viewMode,
+        setViewMode,
+        zoom,
+        setZoom,
+        centerDay,
+        shiftCenter,
+        goToday,
+        pxPerMin,
+        viewStartMin,
+        viewEndMin,
+        visibleDays,
+    } = useViewOptions()
 
-  const { selectedId, selectedAnchor, selectedItem, open, close } = useSelection(items)
+    const { selectedId, selectedAnchor, selectedItem, open, close } = useSelection(items)
+    const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null)
+    const clipboardRef = useRef<EventItem | null>(null)
+    const importInputRef = useRef<HTMLInputElement | null>(null)
 
-  const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null)
+    const alarmItems = useMemo(
+        () =>
+            items.map((item) => ({
+                id: item.id,
+                dayIndex: item.dayIndex,
+                startMin: item.startMin,
+                endMin: item.endMin,
+                label: item.label,
+            })),
+        [items]
+    )
 
-  const alarmItems = useMemo(
-    () =>
-      items.map((x) => ({
-        id: x.id,
-        dayIndex: x.dayIndex,
-        startMin: x.startMin,
-        endMin: x.endMin,
-        label: x.label,
-      })),
-    [items]
-  )
+    const alarm = useAlarm({
+        items: alarmItems,
+        enabled: alarmEnabled,
+        leadMin: alarmLeadMin,
+    })
 
-  const alarm = useAlarm({
-    items: alarmItems,
-    enabled: alarmEnabled,
-    leadMin: alarmLeadMin,
-  })
-
-  // Ctrl+C / Ctrl+V（A案：同じ曜日で開始を GRID_MIN ずらして複製）
-  const clipboardRef = useRef<EventItem | null>(null)
-
-  useEffect(() => {
-    const isTyping = () => {
-      const el = document.activeElement as HTMLElement | null
-      if (!el) return false
-      const tag = el.tagName?.toLowerCase()
-      return tag === "input" || tag === "textarea" || el.isContentEditable
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!e.ctrlKey) return
-      if (isTyping()) return
-
-      const key = e.key.toLowerCase()
-
-      if (key === "c") {
-        if (!selectedItem) return
-        clipboardRef.current = selectedItem
-        e.preventDefault()
-      }
-
-      if (key === "v") {
-        const src = clipboardRef.current
-        if (!src) return
-
-        const duration = src.endMin - src.startMin
-        const startMin = Math.min(1440 - duration, src.startMin + GRID_MIN)
-
-        const next: EventItem = {
-          ...src,
-          id: crypto.randomUUID(),
-          startMin,
-          endMin: startMin + duration,
+    useEffect(() => {
+        const isTyping = () => {
+            const element = document.activeElement as HTMLElement | null
+            if (!element) return false
+            const tagName = element.tagName?.toLowerCase()
+            return tagName === "input" || tagName === "textarea" || element.isContentEditable
         }
 
-        setItems((prev: EventItem[]) => [...prev, next])
-        e.preventDefault()
-      }
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (!event.ctrlKey || isTyping()) return
+
+            const key = event.key.toLowerCase()
+
+            if (key === "c") {
+                if (!selectedItem) return
+                clipboardRef.current = selectedItem
+                event.preventDefault()
+            }
+
+            if (key === "v") {
+                const source = clipboardRef.current
+                if (!source) return
+
+                const duration = source.endMin - source.startMin
+                const startMin = Math.min(1440 - duration, source.startMin + GRID_MIN)
+
+                const next: EventItem = {
+                    ...source,
+                    id: crypto.randomUUID(),
+                    startMin,
+                    endMin: startMin + duration,
+                }
+
+                setItems((previous: EventItem[]) => [...previous, next])
+                event.preventDefault()
+            }
+        }
+
+        window.addEventListener("keydown", onKeyDown)
+        return () => window.removeEventListener("keydown", onKeyDown)
+    }, [selectedItem, setItems])
+
+    const updateSelected = (next: EventItem) => {
+        setItems((previous: EventItem[]) => previous.map((item) => (item.id === next.id ? next : item)))
     }
 
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [selectedItem, setItems])
-
-  const updateSelected = (next: EventItem) => {
-    setItems((prev: EventItem[]) => prev.map((x) => (x.id === next.id ? next : x)))
-  }
-
-  const deleteItem = (id: string) => {
-    setItems((prev: EventItem[]) => prev.filter((x) => x.id !== id))
-    close()
-  }
-
-  const onAddQuick = (dayIndex: number, startMin: number, endMin: number) => {
-    setQuickAdd({
-      dayIndex,
-      startMin,
-      endMin,
-      label: "",
-    })
-  }
-
-  const confirmQuickAdd = () => {
-    if (!quickAdd) return
-    const label = quickAdd.label.trim()
-    if (!label) return
-
-    const item: EventItem = {
-      id: crypto.randomUUID(),
-      dayIndex: quickAdd.dayIndex,
-      startMin: quickAdd.startMin,
-      endMin: quickAdd.endMin,
-      label,
-      description: "",
-      urls: [],
+    const deleteItem = (id: string) => {
+        setItems((previous: EventItem[]) => previous.filter((item) => item.id !== id))
+        close()
     }
 
-    setItems((prev: EventItem[]) => [...prev, item])
-    setQuickAdd(null)
-  }
+    const onAddQuick = (dayIndex: number, startMin: number, endMin: number) => {
+        setQuickAdd({
+            dayIndex,
+            startMin,
+            endMin,
+            label: "",
+        })
+    }
 
-  const gridMin = GRID_MIN
-  const defaultDurationMin = DEFAULT_DURATION
+    const confirmQuickAdd = () => {
+        if (!quickAdd) return
+        const label = quickAdd.label.trim()
+        if (!label) return
 
-  return (
-    <main className="min-h-screen bg-gray-50 text-gray-900">
-      <div className="mx-auto max-w-7xl p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="text-lg font-semibold">Timebox(タイムボクシング用スケジュールアプリ)</div>
+        const item: EventItem = {
+            id: crypto.randomUUID(),
+            dayIndex: quickAdd.dayIndex,
+            startMin: quickAdd.startMin,
+            endMin: quickAdd.endMin,
+            label,
+            description: "",
+            urls: [],
+        }
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <button
-              className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={() => setViewMode(viewMode === "week" ? "3days" : "week")}
-            >
-              {viewMode === "week" ? "3 days" : "Week"}
-            </button>
+        setItems((previous: EventItem[]) => [...previous, item])
+        setQuickAdd(null)
+    }
 
-            <button
-              className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={() => setCompact(!compact)}
-            >
-              {compact ? "Normal height" : "Compact"}
-            </button>
+    const handleExport = () => {
+        downloadJson(items)
+        setTransferMessage(`Exported ${items.length} event${items.length === 1 ? "" : "s"} to JSON.`)
+        setTransferState("success")
+    }
 
-            <button
-              className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={() => setStartAtMidnight(!startAtMidnight)}
-            >
-              {startAtMidnight ? "Start 6:00" : "Start 0:00"}
-            </button>
+    const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0]
+        if (!file) return
 
-            <label className="ml-2 flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={alarmEnabled}
-                onChange={(e) => {
-                  const checked = e.target.checked
-                  setAlarmEnabled(checked)
-                  if (checked) void alarm.primeAudio()
-                }}
-              />
-              アラーム
-            </label>
+        try {
+            const raw = await file.text()
+            const parsed = parseEventItems(raw)
 
-            <label className="flex items-center gap-2 text-sm">
-              何分前
-              <input
-                type="number"
-                min={0}
-                max={120}
-                value={alarmLeadMin}
-                onChange={(e) => setAlarmLeadMin(Number(e.target.value || 0))}
-                className="w-16 rounded border px-2 py-1"
-              />
-            </label>
+            if (!parsed) {
+                setTransferMessage("Import failed. The JSON file is invalid or missing required fields.")
+                setTransferState("error")
+                return
+            }
 
-            <button
-              className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={() => alarm.requestNotificationPermission()}
-            >
-              通知許可
-            </button>
+            setItems(parsed)
+            close()
+            setTransferMessage(`Imported ${parsed.length} event${parsed.length === 1 ? "" : "s"} from ${file.name}.`)
+            setTransferState("success")
+        } catch {
+            setTransferMessage("Import failed. The file could not be read.")
+            setTransferState("error")
+        } finally {
+            event.target.value = ""
+        }
+    }
 
-            {/* <button
-              className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-              onClick={() => alarm.testBeep()}
-            >
-              テスト音
-            </button> */}
+    const showDayNavigator = viewMode !== "week"
+    const dayLabel = DAY_NAMES[centerDay]
 
-            {viewMode === "3days" ? (
-              <div className="flex items-center gap-2">
-                <button
-                  className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={() => shiftCenter(-1)}
-                >
-                  ◀
-                </button>
-                <button
-                  className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={goToday}
-                >
-                  今日
-                </button>
-                <button
-                  className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
-                  onClick={() => shiftCenter(1)}
-                >
-                  ▶
-                </button>
-              </div>
+    return (
+        <main className="flex h-screen flex-col overflow-hidden bg-gray-50 text-gray-900">
+            <header className="border-b border-gray-200 bg-gray-50/95 backdrop-blur">
+                <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div>
+                            <h1 className="text-xl font-semibold text-gray-900">Timebox</h1>
+                            <p className="text-sm text-gray-600">
+                                Weekly planner with JSON backup, zoom levels, and mobile-friendly views.
+                            </p>
+                        </div>
+
+                        <div className="ml-auto flex flex-wrap items-center gap-2">
+                            {(Object.keys(VIEW_MODE_LABELS) as ViewMode[]).map((mode) => (
+                                <button
+                                    key={mode}
+                                    className={viewMode === mode ? ACTIVE_BUTTON_CLASS : BUTTON_CLASS}
+                                    onClick={() => setViewMode(mode)}
+                                >
+                                    {VIEW_MODE_LABELS[mode]}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                        {showDayNavigator ? (
+                            <>
+                                <button className={BUTTON_CLASS} onClick={() => shiftCenter(-1)}>
+                                    Prev
+                                </button>
+                                <button className={BUTTON_CLASS} onClick={goToday}>
+                                    Today
+                                </button>
+                                <button className={BUTTON_CLASS} onClick={() => shiftCenter(1)}>
+                                    Next
+                                </button>
+                                <div className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600">
+                                    Focus: {dayLabel}
+                                </div>
+                            </>
+                        ) : null}
+
+                        <label className="ml-auto flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+                            Zoom
+                            <select
+                                className="rounded border border-gray-200 bg-white px-2 py-1"
+                                value={zoom}
+                                onChange={(event) => setZoom(Number(event.target.value) as ZoomLevel)}
+                            >
+                                {ZOOM_OPTIONS.map((option) => (
+                                    <option key={option} value={option}>
+                                        {option}%
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <button
+                            className={BUTTON_CLASS}
+                            onClick={() => setStartAtMidnight(!startAtMidnight)}
+                        >
+                            {startAtMidnight ? "Start 6:00" : "Start 0:00"}
+                        </button>
+
+                        <button className={BUTTON_CLASS} onClick={handleExport} disabled={!loaded}>
+                            Export JSON
+                        </button>
+
+                        <button
+                            className={BUTTON_CLASS}
+                            onClick={() => importInputRef.current?.click()}
+                            disabled={!loaded}
+                        >
+                            Import JSON
+                        </button>
+
+                        <input
+                            ref={importInputRef}
+                            type="file"
+                            accept="application/json,.json"
+                            className="hidden"
+                            onChange={(event) => {
+                                void handleImport(event)
+                            }}
+                        />
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
+                        <label className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={alarmEnabled}
+                                onChange={(event) => {
+                                    const checked = event.target.checked
+                                    setAlarmEnabled(checked)
+                                    if (checked) void alarm.primeAudio()
+                                }}
+                            />
+                            Alarm
+                        </label>
+
+                        <label className="flex items-center gap-2">
+                            Lead min
+                            <input
+                                type="number"
+                                min={0}
+                                max={120}
+                                value={alarmLeadMin}
+                                onChange={(event) => setAlarmLeadMin(Number(event.target.value || 0))}
+                                className="w-16 rounded border border-gray-200 bg-white px-2 py-1"
+                            />
+                        </label>
+
+                        <button
+                            className={BUTTON_CLASS}
+                            onClick={() => alarm.requestNotificationPermission()}
+                        >
+                            Notification permission
+                        </button>
+
+                        <div className="text-xs text-gray-500">
+                            Double-click empty time to add. Ctrl+C / Ctrl+V duplicates the selected event.
+                        </div>
+                    </div>
+
+                    {transferMessage ? (
+                        <div
+                            className={`rounded-lg px-3 py-2 text-sm ${
+                                transferState === "error"
+                                    ? "border border-rose-200 bg-rose-50 text-rose-700"
+                                    : "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                            }`}
+                        >
+                            {transferMessage}
+                        </div>
+                    ) : null}
+                </div>
+            </header>
+
+            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col px-4 py-4">
+                <div className="min-h-0 flex-1">
+                    <WeekGrid
+                        items={items}
+                        visibleDays={visibleDays}
+                        gridMin={GRID_MIN}
+                        defaultDurationMin={DEFAULT_DURATION}
+                        pxPerMin={pxPerMin}
+                        viewStartMin={viewStartMin}
+                        viewEndMin={viewEndMin}
+                        nowMin={nowMin}
+                        onAddQuick={onAddQuick}
+                        onMoveEvent={(id, next) => {
+                            setItems((previous: EventItem[]) =>
+                                previous.map((item) => (item.id === id ? { ...item, ...next } : item))
+                            )
+                        }}
+                        onSelectEvent={(id, rect) => open(id, rect)}
+                        onDeselect={close}
+                        selectedId={selectedId}
+                    />
+                </div>
+
+                <div className="mt-3 text-xs text-gray-600">
+                    Data still saves to browser localStorage by default. JSON export/import is optional for backup or migration.
+                </div>
+            </div>
+
+            {quickAdd ? (
+                <QuickAddModal
+                    value={quickAdd}
+                    onChange={(next) => setQuickAdd(next)}
+                    onCancel={() => setQuickAdd(null)}
+                    onConfirm={confirmQuickAdd}
+                />
             ) : null}
-          </div>
-        </div>
 
-        <div className="relative rounded-xl border bg-white">
-          <WeekGrid
-            items={items}
-            visibleDays={visibleDays}
-            gridMin={gridMin}
-            defaultDurationMin={defaultDurationMin}
-            pxPerMin={pxPerMin}
-            viewStartMin={viewStartMin}
-            viewEndMin={viewEndMin}
-            nowMin={nowMin}
-            onAddQuick={onAddQuick}
-            onMoveEvent={(id, next) => {
-              setItems((prev: EventItem[]) =>
-                prev.map((x) => (x.id === id ? { ...x, ...next } : x))
-              )
-            }}
-            onSelectEvent={(id, rect) => open(id, rect)}
-            onDeselect={close}
-            selectedId={selectedId}
-            compact={compact}
-          />
-
-          {quickAdd ? (
-            <QuickAddModal
-              value={quickAdd}
-              onChange={(next) => setQuickAdd(next)}
-              onCancel={() => setQuickAdd(null)}
-              onConfirm={confirmQuickAdd}
-            />
-          ) : null}
-
-          {selectedItem && selectedAnchor ? (
-            <EventDetailsPopover
-              item={selectedItem}
-              anchorRect={selectedAnchor}
-              onClose={close}
-              onChange={(patch) => updateSelected({ ...selectedItem, ...patch })}
-              onDelete={() => deleteItem(selectedItem.id)}
-            />
-          ) : null}
-        </div>
-
-        <div className="mt-3 text-xs text-gray-600">
-          保存先：このブラウザの localStorage（端末内） / バックアップ推奨
-        </div>
-      </div>
-    </main>
-  )
+            {selectedItem && selectedAnchor ? (
+                <EventDetailsPopover
+                    item={selectedItem}
+                    anchorRect={selectedAnchor}
+                    onClose={close}
+                    onChange={(patch) => updateSelected({ ...selectedItem, ...patch })}
+                    onDelete={() => deleteItem(selectedItem.id)}
+                />
+            ) : null}
+        </main>
+    )
 }
