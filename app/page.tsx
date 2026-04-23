@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useAlarm } from "../hooks/useAlarm"
 import { QuickAddModal, type QuickAddState } from "../components/QuickAddModal"
 import { EventDetailsPopover } from "../components/EventDetailsPopover"
@@ -39,16 +39,20 @@ export default function Home() {
 
   const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null)
 
-
+  const alarmItems = useMemo(
+    () =>
+      items.map((x) => ({
+        id: x.id,
+        dayIndex: x.dayIndex,
+        startMin: x.startMin,
+        endMin: x.endMin,
+        label: x.label,
+      })),
+    [items]
+  )
 
   const alarm = useAlarm({
-    items: items.map((x) => ({
-      id: x.id,
-      dayIndex: x.dayIndex,
-      startMin: x.startMin,
-      endMin: x.endMin,
-      label: x.label,
-    })),
+    items: alarmItems,
     enabled: alarmEnabled,
     leadMin: alarmLeadMin,
   })
@@ -171,7 +175,11 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={alarmEnabled}
-                onChange={(e) => setAlarmEnabled(e.target.checked)}
+                onChange={(e) => {
+                  const checked = e.target.checked
+                  setAlarmEnabled(checked)
+                  if (checked) void alarm.primeAudio()
+                }}
               />
               アラーム
             </label>

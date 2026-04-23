@@ -2,16 +2,18 @@
 
 This directory stores short implementation logs for issue fixes.
 
-このディレクトリには、Issue 修正時の短い実装ログを保存します。
-
 Each log should capture:
 - the user-visible symptom
 - the likely root cause
 - the chosen fix
 - how the fix was verified
 
+## Japanese
+
+このディレクトリには、issue 修正時の短い実装ログを保存します。
+
 各ログには、少なくとも次の内容を残します。
 - ユーザーから見た症状
 - 想定される原因
-- 採用した修正方法
+- 採用した修正方針
 - どのように修正を検証したか

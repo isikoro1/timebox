@@ -38,8 +38,16 @@ export function EventBlock({
 
     const startTxt = minToHHMM(item.startMin)
     const endTxt = minToHHMM(item.endMin)
+    const firstUrl = (item.urls ?? []).find((u) => {
+        try {
+            const parsed = new URL(u)
+            return parsed.protocol === "http:" || parsed.protocol === "https:"
+        } catch {
+            return false
+        }
+    })
 
-    // split layout
+    // Split overlapping events into up to two lanes.
     const laneGap = 4
     const lanesCount = layout.lanesCount
     const lane = layout.lane
@@ -50,8 +58,8 @@ export function EventBlock({
                 ? { left: 4, right: `calc(50% + ${laneGap / 2}px)` }
                 : { left: `calc(50% - ${laneGap / 2}px)`, right: 4 }
 
-    // ---- Resize (top/bottom handles) ----
     const MIN_DURATION = gridMin
+    const resizeHandleRight = firstUrl ? 36 : 16
 
     const startResize =
         (edge: "top" | "bottom") => (e: React.PointerEvent<HTMLDivElement>) => {
@@ -91,7 +99,6 @@ export function EventBlock({
             window.addEventListener("pointerup", up)
         }
 
-    // ---- Drag move (existing behavior) ----
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         e.preventDefault()
 
@@ -101,7 +108,6 @@ export function EventBlock({
         const startClientX = e.clientX
         const startClientY = e.clientY
 
-        // cache DOM metrics at pointerdown
         const dayCol = target.closest('[data-daycol="1"]') as HTMLElement | null
         const grid = target.closest('[data-daygrid="1"]') as HTMLElement | null
         if (!dayCol || !grid) return
@@ -142,7 +148,6 @@ export function EventBlock({
             window.removeEventListener("pointermove", move)
             window.removeEventListener("pointerup", up)
 
-            // click vs drag
             if (!moved) {
                 const rect = target.getBoundingClientRect()
                 onSelectEvent(item.id, rect)
@@ -161,73 +166,61 @@ export function EventBlock({
             data-eventblock="1"
             style={{ top, height, ...widthStyle }}
             onPointerDown={onPointerDown}
-            title={`${startTxt}–${endTxt}`}
-
+            title={`${startTxt}-${endTxt}`}
         >
-            {/* 左右ドラッググリップ（当たり判定は広く、見た目は細く） */}
             <div
-                className="absolute left-0 top-0 bottom-0 w-4 z-20 cursor-grab"
-                onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e) }}
+                className="absolute left-0 top-0 bottom-0 z-20 w-4 cursor-grab"
+                onPointerDown={(e) => {
+                    e.stopPropagation()
+                    onPointerDown(e)
+                }}
                 title="drag"
             />
             <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-blue-400/60" />
             <div
-                className="absolute right-0 top-0 bottom-0 w-4 z-20 cursor-grab"
-                onPointerDown={(e) => { e.stopPropagation(); onPointerDown(e) }}
+                className="absolute right-0 top-0 bottom-0 z-20 w-4 cursor-grab"
+                onPointerDown={(e) => {
+                    e.stopPropagation()
+                    onPointerDown(e)
+                }}
                 title="drag"
             >
                 <div className="absolute right-0 top-0 bottom-0 w-1.5 bg-blue-400/60" />
             </div>
 
-            {/* リサイズハンドル（左右端を避けて、角はドラッグ優先にする） */}
             <div
-                className="absolute left-4 right-4 top-0 h-2 z-10 cursor-ns-resize"
+                className="absolute left-4 top-0 z-10 h-2 cursor-ns-resize"
+                style={{ right: resizeHandleRight }}
                 onPointerDown={startResize("top")}
                 title="resize start"
             />
             <div
-                className="absolute left-4 right-4 bottom-0 h-2 z-10 cursor-ns-resize"
+                className="absolute left-4 bottom-0 z-10 h-2 cursor-ns-resize"
+                style={{ right: resizeHandleRight }}
                 onPointerDown={startResize("bottom")}
                 title="resize end"
             />
 
-            {(() => {
-                const firstUrl = (item.urls ?? []).find((u) => {
-                    try {
-                        const parsed = new URL(u)
-                        return parsed.protocol === "http:" || parsed.protocol === "https:"
-                    } catch {
-                        return false
-                    }
-                })
+            <div className={`flex gap-1 ${isShortBlock ? "h-full items-center py-0.5" : "items-start py-1"}`}>
+                <div className={`flex-1 truncate text-xs font-medium text-gray-900 ${isShortBlock ? "leading-none" : "leading-4"}`}>
+                    {item.label || "(untitled)"}
+                </div>
 
-                return (
-                    <div
-                        className={`flex gap-1 ${isShortBlock ? "h-full items-center py-0.5" : "items-start py-1"}`}
+                {firstUrl ? (
+                    <a
+                        href={firstUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        className="relative z-30 shrink-0 rounded border bg-white px-1 text-[11px] leading-4 hover:bg-gray-50"
+                        title="open link"
+                        aria-label="open link"
                     >
-                        <div
-                            className={`flex-1 truncate font-medium text-gray-900 text-xs ${isShortBlock ? "leading-none" : "leading-4"}`}
-                        >
-                            {item.label || "（未入力）"}
-                        </div>
-
-                        {firstUrl ? (
-                            <a
-                                href={firstUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onClick={(e) => e.stopPropagation()}
-                                className="shrink-0 rounded border bg-white px-1 text-[11px] leading-4 hover:bg-gray-50"
-                                title="open link"
-                                aria-label="open link"
-                            >
-                                🔗
-                            </a>
-                        ) : null}
-                    </div>
-                )
-            })()}
+                        Link
+                    </a>
+                ) : null}
+            </div>
         </div>
     )
 }
