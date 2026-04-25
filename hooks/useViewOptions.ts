@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react"
 
 export type ViewMode = "day" | "3days" | "week"
-export type ZoomLevel = 100 | 150 | 200
+export type ZoomLevel = 75 | 100 | 150 | 200
 
 function getTodayMonBasedIndex(): number {
     const jsDay = new Date().getDay()
