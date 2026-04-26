@@ -3,6 +3,7 @@
 import React from "react"
 import { DayColumn } from "./week/DayColumn"
 import { formatDateHeader, getTodayDateKey } from "../lib/date"
+import { minToHHMM } from "../lib/time"
 
 export type EventItem = {
     id: string
@@ -117,6 +118,9 @@ export function WeekGrid({
     const headerColumns = `${TIME_COLUMN_WIDTH}px repeat(${visibleDateKeys.length}, minmax(0, 1fr))`
     const handleEmpty = onAddQuick ?? onDoubleClickEmpty ?? (() => {})
     const todayKey = getTodayDateKey()
+    const todayIndex = visibleDateKeys.indexOf(todayKey)
+    const showNowLine = nowMin !== null && nowMin >= viewStartMin && nowMin <= viewEndMin
+    const nowLineTop = showNowLine ? (nowMin - viewStartMin) * pxPerMin : 0
 
     return (
         <div
@@ -175,7 +179,7 @@ export function WeekGrid({
                     </div>
 
                     <div
-                        className="grid flex-1"
+                        className="relative grid flex-1"
                         data-daygrid="1"
                         style={{ gridTemplateColumns: `repeat(${visibleDateKeys.length}, minmax(0, 1fr))` }}
                     >
@@ -190,7 +194,6 @@ export function WeekGrid({
                                 pxPerMin={pxPerMin}
                                 gridMin={gridMin}
                                 defaultDurationMin={defaultDurationMin}
-                                nowMin={dateKey === todayKey ? nowMin : null}
                                 viewStartMin={viewStartMin}
                                 viewEndMin={viewEndMin}
                                 heightPx={gridHeightPx}
@@ -201,6 +204,25 @@ export function WeekGrid({
                                 onSelectEvent={onSelectEvent}
                             />
                         ))}
+
+                        {showNowLine ? (
+                            <div
+                                className="pointer-events-none absolute left-0 right-0 z-40 border-t-2 border-gray-700/65"
+                                style={{ top: nowLineTop }}
+                                title={`now ${minToHHMM(nowMin)}`}
+                                aria-hidden="true"
+                            >
+                                {todayIndex >= 0 ? (
+                                    <div
+                                        className="absolute -top-0.5 border-t-[3px] border-red-500"
+                                        style={{
+                                            left: `${(todayIndex / visibleDateKeys.length) * 100}%`,
+                                            width: `${100 / visibleDateKeys.length}%`,
+                                        }}
+                                    />
+                                ) : null}
+                            </div>
+                        ) : null}
                     </div>
                 </div>
             </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import React from "react"
-import { clamp, minToHHMM, snap } from "@/lib/time"
+import { clamp, snap } from "@/lib/time"
 import type { EventItem } from "@/components/WeekGrid"
 import type { LayoutInfo } from "./layout"
 import { EventBlock } from "./EventBlock"
@@ -15,7 +15,6 @@ export function DayColumn({
     pxPerMin,
     gridMin,
     defaultDurationMin,
-    nowMin,
     viewStartMin,
     viewEndMin,
     heightPx,
@@ -33,7 +32,6 @@ export function DayColumn({
     pxPerMin: number
     gridMin: number
     defaultDurationMin: number
-    nowMin: number | null
     viewStartMin: number
     viewEndMin: number
     heightPx: number
@@ -91,14 +89,6 @@ export function DayColumn({
                 />
             ))}
 
-            {nowMin !== null && nowMin >= viewStartMin && nowMin <= viewEndMin && (
-                <div
-                    className="pointer-events-none absolute left-0 right-0 z-30 border-t-2 border-red-500"
-                    style={{ top: (nowMin - viewStartMin) * pxPerMin }}
-                    title={`now ${minToHHMM(nowMin)}`}
-                    aria-hidden="true"
-                />
-            )}
         </div>
     )
 }
