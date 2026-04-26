@@ -1,11 +1,10 @@
 "use client"
 
+import { formatDateHeader } from "@/lib/date"
 import { minToHHMM } from "@/lib/time"
 
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-
 export type QuickAddState = {
-    dayIndex: number
+    dateKey: string
     startMin: number
     endMin: number
     label: string
@@ -25,8 +24,8 @@ export function QuickAddModal({
     return (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/30">
             <div className="w-[360px] rounded-lg bg-white p-4 shadow">
-                <div className="text-sm text-gray-600 mb-2">
-                    {DAY_NAMES[value.dayIndex]} {minToHHMM(value.startMin)}–
+                <div className="mb-2 text-sm text-gray-600">
+                    {formatDateHeader(value.dateKey)} {minToHHMM(value.startMin)}-
                     {minToHHMM(value.endMin)}
                 </div>
 
@@ -39,7 +38,7 @@ export function QuickAddModal({
                         if (e.key === "Enter") onConfirm()
                         if (e.key === "Escape") onCancel()
                     }}
-                    placeholder="ラベル"
+                    placeholder="Label"
                 />
 
                 <div className="mt-3 flex justify-end gap-2">
@@ -47,13 +46,13 @@ export function QuickAddModal({
                         className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
                         onClick={onCancel}
                     >
-                        キャンセル
+                        Cancel
                     </button>
                     <button
                         className="rounded border px-3 py-2 text-sm hover:bg-gray-50"
                         onClick={onConfirm}
                     >
-                        ✔ 追加
+                        Add
                     </button>
                 </div>
             </div>

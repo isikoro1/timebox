@@ -12,7 +12,7 @@ export function EventBlock({
     gridMin,
     viewStartMin,
     viewEndMin,
-    visibleDays,
+    visibleDateKeys,
     selected,
     onMoveEvent,
     onSelectEvent,
@@ -23,9 +23,9 @@ export function EventBlock({
     gridMin: number
     viewStartMin: number
     viewEndMin: number
-    visibleDays: number[]
+    visibleDateKeys: string[]
     selected: boolean
-    onMoveEvent: (id: string, next: { dayIndex: number; startMin: number; endMin: number }) => void
+    onMoveEvent: (id: string, next: { dateKey: string; startMin: number; endMin: number }) => void
     onSelectEvent: (id: string, rect: DOMRect) => void
 }) {
     const visibleTopMin = Math.max(item.startMin, viewStartMin)
@@ -81,12 +81,12 @@ export function EventBlock({
                     let nextEnd = origEnd + deltaMin
                     nextEnd = snap(nextEnd, gridMin)
                     nextEnd = clamp(nextEnd, origStart + MIN_DURATION, 1440)
-                    onMoveEvent(item.id, { dayIndex: item.dayIndex, startMin: origStart, endMin: nextEnd })
+                    onMoveEvent(item.id, { dateKey: item.dateKey, startMin: origStart, endMin: nextEnd })
                 } else {
                     let nextStart = origStart + deltaMin
                     nextStart = snap(nextStart, gridMin)
                     nextStart = clamp(nextStart, 0, origEnd - MIN_DURATION)
-                    onMoveEvent(item.id, { dayIndex: item.dayIndex, startMin: nextStart, endMin: origEnd })
+                    onMoveEvent(item.id, { dateKey: item.dateKey, startMin: nextStart, endMin: origEnd })
                 }
             }
 
@@ -113,7 +113,7 @@ export function EventBlock({
         if (!dayCol || !grid) return
 
         const gridRect = grid.getBoundingClientRect()
-        const colWidth = gridRect.width / visibleDays.length
+        const colWidth = gridRect.width / visibleDateKeys.length
         const origVisibleIndex = Number(dayCol.dataset.visibleIndex ?? "0")
 
         const orig = {
@@ -137,11 +137,11 @@ export function EventBlock({
             const nextVisibleIndex = clamp(
                 Math.round((origVisibleIndex * colWidth + dx) / colWidth),
                 0,
-                visibleDays.length - 1
+                visibleDateKeys.length - 1
             )
-            const nextDayIndex = visibleDays[nextVisibleIndex]
+            const nextDateKey = visibleDateKeys[nextVisibleIndex]
 
-            onMoveEvent(item.id, { dayIndex: nextDayIndex, startMin: nextStart, endMin: nextEnd })
+            onMoveEvent(item.id, { dateKey: nextDateKey, startMin: nextStart, endMin: nextEnd })
         }
 
         const up = () => {

@@ -1,9 +1,8 @@
 "use client"
 
 import { minToHHMM } from "@/lib/time"
+import { formatDateHeader } from "@/lib/date"
 import type { EventItem } from "@/components/WeekGrid"
-
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 export function EventDetailsPanel({
     item,
@@ -31,7 +30,7 @@ export function EventDetailsPanel({
             <div className="p-4 space-y-4">
                 <div className="text-sm text-gray-700">
                     <div className="font-medium text-gray-900">
-                        {DAY_NAMES[item.dayIndex]} {minToHHMM(item.startMin)}–{minToHHMM(item.endMin)}
+                        {formatDateHeader(item.dateKey)} {minToHHMM(item.startMin)}-{minToHHMM(item.endMin)}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                         ※ ブロックはドラッグで移動（リサイズは後で追加）
