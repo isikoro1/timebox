@@ -10,7 +10,7 @@ The visible date range was anchored to the start of the week or centered around 
 
 ## Fix
 
-- Added fixed previous, today, and next date controls above the timeline.
+- Added fixed previous, today, and next date controls.
 - Added a calendar icon below the settings icon that opens a monthly date picker.
 - Changed date selection so the chosen date becomes the leftmost visible timeline column.
 - Changed previous and next controls to move by one day in every view mode.
@@ -41,7 +41,7 @@ The visible date range was anchored to the start of the week or centered around 
 
 ### 修正
 
-- タイムライン上部に前日、今日、翌日の固定ナビゲーションを追加しました。
+- 日付移動コントロールを追加しました。
 - 設定アイコンの下にカレンダーアイコンを追加し、月カレンダーを開けるようにしました。
 - 日付選択時に、選択した日がタイムラインの一番左に来るようにしました。
 - 前後移動ボタンは、すべての表示モードで1日ずつ移動するようにしました。
