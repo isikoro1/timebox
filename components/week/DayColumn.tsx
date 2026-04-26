@@ -19,6 +19,7 @@ export function DayColumn({
     viewStartMin,
     viewEndMin,
     heightPx,
+    isToday,
     selectedId,
     onDoubleClickEmpty,
     onMoveEvent,
@@ -36,6 +37,7 @@ export function DayColumn({
     viewStartMin: number
     viewEndMin: number
     heightPx: number
+    isToday: boolean
     selectedId: string | null
     onDoubleClickEmpty: (dateKey: string, startMin: number, endMin: number) => void
     onMoveEvent: (id: string, next: { dateKey: string; startMin: number; endMin: number }) => void
@@ -46,7 +48,9 @@ export function DayColumn({
 
     return (
         <div
-            className="relative border-r last:border-r-0 select-none"
+            className={`relative border-r last:border-r-0 select-none ${
+                isToday ? "bg-red-50/40 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.35)]" : ""
+            }`}
             data-daycol="1"
             data-visible-index={visibleIndex}
             style={{ height: heightPx }}
