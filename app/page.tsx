@@ -182,6 +182,19 @@ export default function Home() {
         return () => window.removeEventListener("keydown", onKeyDown)
     }, [settingsOpen, calendarOpen])
 
+    useEffect(() => {
+        if (!calendarOpen) return
+
+        const onPointerDown = (event: PointerEvent) => {
+            const target = event.target as HTMLElement | null
+            if (target?.closest('[data-calendar-root="1"]')) return
+            setCalendarOpen(false)
+        }
+
+        window.addEventListener("pointerdown", onPointerDown)
+        return () => window.removeEventListener("pointerdown", onPointerDown)
+    }, [calendarOpen])
+
     const updateSelected = (next: EventItem) => {
         setItems((previous: EventItem[]) => previous.map((item) => (item.id === next.id ? next : item)))
     }
@@ -253,6 +266,7 @@ export default function Home() {
 
     const showDayNavigator = viewMode !== "week"
     const dayLabel = formatDateHeader(centerDateKey)
+    const visibleMonthLabel = getMonthLabel(visibleDateKeys[0] ?? centerDateKey)
     const todayKey = getTodayDateKey()
     const calendarDays = getMonthCalendarDays(calendarMonthKey)
     const moveDate = (direction: -1 | 1) => shiftCenter(direction)
@@ -264,7 +278,11 @@ export default function Home() {
 
     return (
         <main className="flex h-screen flex-col overflow-hidden bg-gray-50 text-gray-900">
-            <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-gray-200 bg-white/95 p-1 shadow-lg shadow-gray-900/10 backdrop-blur sm:top-4">
+            <div className="fixed left-3 top-3 z-40 rounded-full border border-gray-200 bg-white/95 px-4 py-2 text-sm font-semibold text-gray-800 shadow-lg shadow-gray-900/10 backdrop-blur sm:left-4 sm:top-4">
+                {visibleMonthLabel}
+            </div>
+
+            <div className="fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-gray-200 bg-white/95 p-1 shadow-lg shadow-gray-900/10 backdrop-blur sm:bottom-4">
                 <button
                     className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
                     type="button"
@@ -332,7 +350,7 @@ export default function Home() {
                     <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1A1.7 1.7 0 0 0 9 4.7a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
                 </svg>
             </button>
-            <div className="fixed right-3 top-16 z-40 sm:right-4 sm:top-[4.25rem]">
+            <div className="fixed right-3 top-16 z-40 sm:right-4 sm:top-[4.25rem]" data-calendar-root="1">
                 <button
                     className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur transition hover:bg-white"
                     type="button"
@@ -465,7 +483,7 @@ export default function Home() {
                 }}
             />
 
-            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-2 pt-16 sm:p-4 sm:pt-16">
+            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-2 pb-16 pt-16 sm:p-4 sm:pb-16 sm:pt-16">
                 <div className="min-h-0 flex-1">
                     <WeekGrid
                         items={items}
