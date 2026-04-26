@@ -9,7 +9,7 @@ import { useNowMin } from "../hooks/useNowMin"
 import { useSelection } from "../hooks/useSelection"
 import { useTimeboxingItems } from "../hooks/useTimeboxingItems"
 import { type ViewMode, type ZoomLevel, useViewOptions } from "../hooks/useViewOptions"
-import { formatDateHeader } from "../lib/date"
+import { formatDateHeader, getTodayDateKey, parseDateKey, toDateKey } from "../lib/date"
 import { parseEventItems } from "../lib/storage"
 
 const STORAGE_KEY = "timeboxing-tool:v1:week-items"
@@ -26,6 +26,7 @@ const BUTTON_CLASS =
 const ACTIVE_BUTTON_CLASS =
     "rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
 const SETTINGS_SECTION_CLASS = "space-y-3 border-t border-gray-100 pt-4 first:border-t-0 first:pt-0"
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 
 function buildExportFilename() {
     const stamp = new Date().toISOString().slice(0, 10)
@@ -44,6 +45,37 @@ function downloadJson(items: EventItem[]) {
     URL.revokeObjectURL(url)
 }
 
+function getMonthLabel(dateKey: string) {
+    const date = parseDateKey(dateKey)
+    return `${date.getFullYear()} / ${date.getMonth() + 1}`
+}
+
+function addMonths(dateKey: string, delta: number) {
+    const date = parseDateKey(dateKey)
+    const day = date.getDate()
+    const next = new Date(date.getFullYear(), date.getMonth() + delta, 1)
+    const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+    next.setDate(Math.min(day, lastDay))
+    return toDateKey(next)
+}
+
+function getMonthCalendarDays(monthDateKey: string) {
+    const monthDate = parseDateKey(monthDateKey)
+    const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
+    const firstGridDate = new Date(firstOfMonth)
+    firstGridDate.setDate(firstGridDate.getDate() - ((firstGridDate.getDay() + 6) % 7))
+
+    return Array.from({ length: 42 }, (_, index) => {
+        const date = new Date(firstGridDate)
+        date.setDate(firstGridDate.getDate() + index)
+        return {
+            dateKey: toDateKey(date),
+            day: date.getDate(),
+            inMonth: date.getMonth() === monthDate.getMonth(),
+        }
+    })
+}
+
 export default function Home() {
     const { items, setItems, loaded } = useTimeboxingItems(STORAGE_KEY)
     const nowMin = useNowMin(15000)
@@ -52,6 +84,8 @@ export default function Home() {
     const [transferMessage, setTransferMessage] = useState<string | null>(null)
     const [transferState, setTransferState] = useState<"success" | "error" | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
+    const [calendarOpen, setCalendarOpen] = useState(false)
+    const [calendarMonthKey, setCalendarMonthKey] = useState(getTodayDateKey)
 
     const {
         startAtMidnight,
@@ -61,6 +95,7 @@ export default function Home() {
         zoom,
         setZoom,
         centerDateKey,
+        setCenterDateKey,
         shiftCenter,
         goToday,
         pxPerMin,
@@ -135,15 +170,17 @@ export default function Home() {
     }, [selectedItem, setItems])
 
     useEffect(() => {
-        if (!settingsOpen) return
+        if (!settingsOpen && !calendarOpen) return
 
         const onKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") setSettingsOpen(false)
+            if (event.key !== "Escape") return
+            setSettingsOpen(false)
+            setCalendarOpen(false)
         }
 
         window.addEventListener("keydown", onKeyDown)
         return () => window.removeEventListener("keydown", onKeyDown)
-    }, [settingsOpen])
+    }, [settingsOpen, calendarOpen])
 
     const updateSelected = (next: EventItem) => {
         setItems((previous: EventItem[]) => previous.map((item) => (item.id === next.id ? next : item)))
@@ -216,9 +253,65 @@ export default function Home() {
 
     const showDayNavigator = viewMode !== "week"
     const dayLabel = formatDateHeader(centerDateKey)
+    const todayKey = getTodayDateKey()
+    const calendarDays = getMonthCalendarDays(calendarMonthKey)
+    const moveDate = (direction: -1 | 1) => shiftCenter(direction)
+    const jumpToDate = (dateKey: string) => {
+        setCenterDateKey(dateKey)
+        setCalendarMonthKey(dateKey)
+        setCalendarOpen(false)
+    }
 
     return (
         <main className="flex h-screen flex-col overflow-hidden bg-gray-50 text-gray-900">
+            <div className="fixed left-1/2 top-3 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-gray-200 bg-white/95 p-1 shadow-lg shadow-gray-900/10 backdrop-blur sm:top-4">
+                <button
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
+                    type="button"
+                    aria-label="Previous dates"
+                    onClick={() => moveDate(-1)}
+                >
+                    <svg
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                    >
+                        <path d="m15 18-6-6 6-6" />
+                    </svg>
+                </button>
+                <button
+                    className="h-9 rounded-full px-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-100"
+                    type="button"
+                    onClick={goToday}
+                >
+                    Today
+                </button>
+                <button
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
+                    type="button"
+                    aria-label="Next dates"
+                    onClick={() => moveDate(1)}
+                >
+                    <svg
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                    >
+                        <path d="m9 18 6-6-6-6" />
+                    </svg>
+                </button>
+            </div>
+
             <button
                 className="fixed right-3 top-3 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur transition hover:bg-white sm:right-4 sm:top-4"
                 type="button"
@@ -239,6 +332,116 @@ export default function Home() {
                     <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1A1.7 1.7 0 0 0 9 4.7a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
                 </svg>
             </button>
+            <div className="fixed right-3 top-16 z-40 sm:right-4 sm:top-[4.25rem]">
+                <button
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur transition hover:bg-white"
+                    type="button"
+                    aria-label="Open calendar"
+                    onClick={() => {
+                        setCalendarMonthKey(centerDateKey)
+                        setCalendarOpen((open) => !open)
+                    }}
+                >
+                    <svg
+                        aria-hidden="true"
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                    >
+                        <path d="M8 2v4" />
+                        <path d="M16 2v4" />
+                        <path d="M3 10h18" />
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                    </svg>
+                </button>
+
+                {calendarOpen ? (
+                    <div
+                        className="mt-2 w-80 rounded-xl border border-gray-200 bg-white p-3 shadow-2xl shadow-gray-900/15"
+                        onMouseDown={(event) => event.stopPropagation()}
+                    >
+                        <div className="mb-3 flex items-center gap-2">
+                            <button
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition hover:bg-gray-50"
+                                type="button"
+                                aria-label="Previous month"
+                                onClick={() => setCalendarMonthKey((current) => addMonths(current, -1))}
+                            >
+                                <svg
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path d="m15 18-6-6 6-6" />
+                                </svg>
+                            </button>
+                            <div className="flex-1 text-center text-sm font-semibold text-gray-900">
+                                {getMonthLabel(calendarMonthKey)}
+                            </div>
+                            <button
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition hover:bg-gray-50"
+                                type="button"
+                                aria-label="Next month"
+                                onClick={() => setCalendarMonthKey((current) => addMonths(current, 1))}
+                            >
+                                <svg
+                                    aria-hidden="true"
+                                    className="h-4 w-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path d="m9 18 6-6-6-6" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-gray-500">
+                            {WEEKDAY_LABELS.map((label) => (
+                                <div key={label} className="py-1">
+                                    {label}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-7 gap-1">
+                            {calendarDays.map((day) => {
+                                const isSelected = day.dateKey === centerDateKey
+                                const isToday = day.dateKey === todayKey
+                                return (
+                                    <button
+                                        key={day.dateKey}
+                                        className={`h-9 rounded-lg text-sm font-medium transition ${
+                                            isSelected
+                                                ? "bg-blue-600 text-white hover:bg-blue-700"
+                                                : isToday
+                                                  ? "border border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                                                  : day.inMonth
+                                                    ? "text-gray-800 hover:bg-gray-100"
+                                                    : "text-gray-400 hover:bg-gray-50"
+                                        }`}
+                                        type="button"
+                                        onClick={() => jumpToDate(day.dateKey)}
+                                    >
+                                        {day.day}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                ) : null}
+            </div>
 
             {transferMessage ? (
                 <div
@@ -262,7 +465,7 @@ export default function Home() {
                 }}
             />
 
-            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-2 sm:p-4">
+            <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-2 pt-16 sm:p-4 sm:pt-16">
                 <div className="min-h-0 flex-1">
                     <WeekGrid
                         items={items}
@@ -348,13 +551,13 @@ export default function Home() {
 
                                 {showDayNavigator ? (
                                     <div className="mt-3 grid grid-cols-3 gap-2">
-                                        <button className={BUTTON_CLASS} type="button" onClick={() => shiftCenter(-1)}>
+                                        <button className={BUTTON_CLASS} type="button" onClick={() => moveDate(-1)}>
                                             Prev
                                         </button>
                                         <button className={BUTTON_CLASS} type="button" onClick={goToday}>
                                             Today
                                         </button>
-                                        <button className={BUTTON_CLASS} type="button" onClick={() => shiftCenter(1)}>
+                                        <button className={BUTTON_CLASS} type="button" onClick={() => moveDate(1)}>
                                             Next
                                         </button>
                                         <div className="col-span-3 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600">

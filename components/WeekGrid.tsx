@@ -14,8 +14,7 @@ export type EventItem = {
     description?: string
 }
 
-const TIME_COLUMN_WIDTH = 64
-const DAY_COLUMN_MIN_WIDTH = 180
+const TIME_COLUMN_WIDTH = 52
 
 type LayoutInfo = { lane: 0 | 1; lanesCount: 1 | 2 }
 
@@ -115,14 +114,13 @@ export function WeekGrid({
 
     const startHour = Math.floor(viewStartMin / 60)
     const endHour = Math.floor(viewEndMin / 60)
-    const headerColumns = `${TIME_COLUMN_WIDTH}px repeat(${visibleDateKeys.length}, minmax(${DAY_COLUMN_MIN_WIDTH}px, 1fr))`
-    const contentWidth = TIME_COLUMN_WIDTH + DAY_COLUMN_MIN_WIDTH * visibleDateKeys.length
+    const headerColumns = `${TIME_COLUMN_WIDTH}px repeat(${visibleDateKeys.length}, minmax(0, 1fr))`
     const handleEmpty = onAddQuick ?? onDoubleClickEmpty ?? (() => {})
     const todayKey = getTodayDateKey()
 
     return (
         <div
-            className="h-full overflow-auto overscroll-contain rounded-xl border border-gray-200 bg-white"
+            className="h-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-gray-200 bg-white"
             onMouseDown={(event) => {
                 if (!onDeselect) return
                 const target = event.target as HTMLElement
@@ -130,7 +128,7 @@ export function WeekGrid({
                 onDeselect()
             }}
         >
-            <div className="min-w-full" style={{ minWidth: `${contentWidth}px` }}>
+            <div className="min-w-full">
                 <div
                     className="sticky top-0 z-30 grid border-b border-gray-200 bg-gray-50/95 backdrop-blur"
                     style={{ gridTemplateColumns: headerColumns }}
@@ -138,20 +136,32 @@ export function WeekGrid({
                     <div className="sticky left-0 z-40 border-r border-gray-200 bg-gray-50/95 p-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                         Time
                     </div>
-                    {visibleDateKeys.map((dateKey) => (
-                        <div
-                            key={dateKey}
-                            className="border-r border-gray-200 p-2 text-sm font-semibold text-gray-800 last:border-r-0"
-                        >
-                            {formatDateHeader(dateKey)}
-                        </div>
-                    ))}
+                    {visibleDateKeys.map((dateKey) => {
+                        const isToday = dateKey === todayKey
+                        const [dayName, dateLabel] = formatDateHeader(dateKey).split(" ")
+                        return (
+                            <div
+                                key={dateKey}
+                                className={`min-w-0 border-r border-gray-200 px-1 py-1.5 text-center text-xs font-semibold last:border-r-0 ${
+                                    isToday ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200" : "text-gray-800"
+                                }`}
+                            >
+                                <div className="truncate leading-4">{dayName}</div>
+                                <div className="truncate leading-4">{dateLabel}</div>
+                                {isToday ? (
+                                    <div className="mt-0.5 inline-flex max-w-full rounded-full bg-red-100 px-1 py-0.5 text-[9px] font-semibold leading-none text-red-700">
+                                        Today
+                                    </div>
+                                ) : null}
+                            </div>
+                        )
+                    })}
                 </div>
 
                 <div className="flex">
                     <div
-                        className="relative sticky left-0 z-20 w-16 shrink-0 border-r border-gray-200 bg-white"
-                        style={{ height: gridHeightPx }}
+                        className="relative sticky left-0 z-20 shrink-0 border-r border-gray-200 bg-white"
+                        style={{ width: TIME_COLUMN_WIDTH, height: gridHeightPx }}
                     >
                         {Array.from({ length: endHour - startHour + 1 }).map((_, index) => {
                             const hour = startHour + index
@@ -167,7 +177,7 @@ export function WeekGrid({
                     <div
                         className="grid flex-1"
                         data-daygrid="1"
-                        style={{ gridTemplateColumns: `repeat(${visibleDateKeys.length}, minmax(${DAY_COLUMN_MIN_WIDTH}px, 1fr))` }}
+                        style={{ gridTemplateColumns: `repeat(${visibleDateKeys.length}, minmax(0, 1fr))` }}
                     >
                         {visibleDateKeys.map((dateKey, visibleIndex) => (
                             <DayColumn
@@ -184,6 +194,7 @@ export function WeekGrid({
                                 viewStartMin={viewStartMin}
                                 viewEndMin={viewEndMin}
                                 heightPx={gridHeightPx}
+                                isToday={dateKey === todayKey}
                                 selectedId={selectedId}
                                 onDoubleClickEmpty={handleEmpty}
                                 onMoveEvent={onMoveEvent}
