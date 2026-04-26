@@ -1,4 +1,5 @@
 import type { EventItem } from "../components/WeekGrid"
+import { getDateKeyForLegacyDayIndex, isDateKey } from "./date"
 
 type UnknownRecord = Record<string, unknown>
 
@@ -24,28 +25,47 @@ function parseStringArray(value: unknown): string[] | undefined {
 export function isValidEventItem(value: unknown): value is EventItem {
     if (!isRecord(value)) return false
 
-    const { id, dayIndex, startMin, endMin } = value
+    const { id, dateKey, startMin, endMin } = value
 
     if (typeof id !== "string" || !id.trim()) return false
-    if (typeof dayIndex !== "number" || !Number.isFinite(dayIndex)) return false
+    if (!isDateKey(dateKey)) return false
     if (typeof startMin !== "number" || !Number.isFinite(startMin)) return false
     if (typeof endMin !== "number" || !Number.isFinite(endMin)) return false
 
-    if (dayIndex < 0 || dayIndex > 6) return false
     if (startMin < 0 || startMin >= 1440) return false
     if (endMin <= startMin || endMin > 1440) return false
 
     return true
 }
 
-export function sanitizeEventItem(value: unknown): EventItem | null {
-    if (!isValidEventItem(value)) return null
+function getMigratedDateKey(record: UnknownRecord): string | null {
+    if (isDateKey(record.dateKey)) {
+        return record.dateKey
+    }
 
+    if (typeof record.dayIndex !== "number" || !Number.isFinite(record.dayIndex)) return null
+    if (record.dayIndex < 0 || record.dayIndex > 6) return null
+
+    return getDateKeyForLegacyDayIndex(record.dayIndex)
+}
+
+export function sanitizeEventItem(value: unknown): EventItem | null {
+    if (!isRecord(value)) return null
     const record = value as UnknownRecord
+    const dateKey = getMigratedDateKey(record)
+
+    if (!dateKey) return null
+
+    const candidate = {
+        ...record,
+        dateKey,
+    }
+
+    if (!isValidEventItem(candidate)) return null
 
     return {
         id: record.id as string,
-        dayIndex: record.dayIndex as number,
+        dateKey,
         startMin: record.startMin as number,
         endMin: record.endMin as number,
         label: typeof record.label === "string" ? record.label : "",

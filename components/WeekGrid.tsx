@@ -2,10 +2,11 @@
 
 import React from "react"
 import { DayColumn } from "./week/DayColumn"
+import { formatDateHeader, getTodayDateKey } from "../lib/date"
 
 export type EventItem = {
     id: string
-    dayIndex: number
+    dateKey: string
     startMin: number
     endMin: number
     label: string
@@ -13,7 +14,6 @@ export type EventItem = {
     description?: string
 }
 
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const TIME_COLUMN_WIDTH = 64
 const DAY_COLUMN_MIN_WIDTH = 180
 
@@ -73,7 +73,7 @@ export function WeekGrid({
     nowMin,
     viewStartMin,
     viewEndMin,
-    visibleDays,
+    visibleDateKeys,
     selectedId,
     onAddQuick,
     onDoubleClickEmpty,
@@ -88,36 +88,37 @@ export function WeekGrid({
     nowMin: number | null
     viewStartMin: number
     viewEndMin: number
-    visibleDays: number[]
+    visibleDateKeys: string[]
     selectedId: string | null
-    onAddQuick?: (dayIndex: number, startMin: number, endMin: number) => void
-    onDoubleClickEmpty?: (dayIndex: number, startMin: number, endMin: number) => void
-    onMoveEvent: (id: string, next: { dayIndex: number; startMin: number; endMin: number }) => void
+    onAddQuick?: (dateKey: string, startMin: number, endMin: number) => void
+    onDoubleClickEmpty?: (dateKey: string, startMin: number, endMin: number) => void
+    onMoveEvent: (id: string, next: { dateKey: string; startMin: number; endMin: number }) => void
     onSelectEvent: (id: string, rect: DOMRect) => void
     onDeselect?: () => void
 }) {
     const rangeMin = viewEndMin - viewStartMin
     const gridHeightPx = rangeMin * pxPerMin
 
-    const itemsByDay: Record<number, EventItem[]> = {}
-    for (const day of visibleDays) itemsByDay[day] = []
+    const itemsByDate: Record<string, EventItem[]> = {}
+    for (const dateKey of visibleDateKeys) itemsByDate[dateKey] = []
     for (const item of items) {
-        if (itemsByDay[item.dayIndex]) itemsByDay[item.dayIndex].push(item)
+        if (itemsByDate[item.dateKey]) itemsByDate[item.dateKey].push(item)
     }
-    for (const day of visibleDays) {
-        itemsByDay[day].sort((a, b) => a.startMin - b.startMin)
+    for (const dateKey of visibleDateKeys) {
+        itemsByDate[dateKey].sort((a, b) => a.startMin - b.startMin)
     }
 
-    const layoutByDay: Record<number, Map<string, LayoutInfo>> = {}
-    for (const day of visibleDays) {
-        layoutByDay[day] = computeTwoLaneLayout(itemsByDay[day] ?? [])
+    const layoutByDate: Record<string, Map<string, LayoutInfo>> = {}
+    for (const dateKey of visibleDateKeys) {
+        layoutByDate[dateKey] = computeTwoLaneLayout(itemsByDate[dateKey] ?? [])
     }
 
     const startHour = Math.floor(viewStartMin / 60)
     const endHour = Math.floor(viewEndMin / 60)
-    const headerColumns = `${TIME_COLUMN_WIDTH}px repeat(${visibleDays.length}, minmax(${DAY_COLUMN_MIN_WIDTH}px, 1fr))`
-    const contentWidth = TIME_COLUMN_WIDTH + DAY_COLUMN_MIN_WIDTH * visibleDays.length
+    const headerColumns = `${TIME_COLUMN_WIDTH}px repeat(${visibleDateKeys.length}, minmax(${DAY_COLUMN_MIN_WIDTH}px, 1fr))`
+    const contentWidth = TIME_COLUMN_WIDTH + DAY_COLUMN_MIN_WIDTH * visibleDateKeys.length
     const handleEmpty = onAddQuick ?? onDoubleClickEmpty ?? (() => {})
+    const todayKey = getTodayDateKey()
 
     return (
         <div
@@ -137,12 +138,12 @@ export function WeekGrid({
                     <div className="sticky left-0 z-40 border-r border-gray-200 bg-gray-50/95 p-2 text-xs font-medium uppercase tracking-wide text-gray-500">
                         Time
                     </div>
-                    {visibleDays.map((dayIndex) => (
+                    {visibleDateKeys.map((dateKey) => (
                         <div
-                            key={dayIndex}
+                            key={dateKey}
                             className="border-r border-gray-200 p-2 text-sm font-semibold text-gray-800 last:border-r-0"
                         >
-                            {DAY_NAMES[dayIndex]}
+                            {formatDateHeader(dateKey)}
                         </div>
                     ))}
                 </div>
@@ -166,20 +167,20 @@ export function WeekGrid({
                     <div
                         className="grid flex-1"
                         data-daygrid="1"
-                        style={{ gridTemplateColumns: `repeat(${visibleDays.length}, minmax(${DAY_COLUMN_MIN_WIDTH}px, 1fr))` }}
+                        style={{ gridTemplateColumns: `repeat(${visibleDateKeys.length}, minmax(${DAY_COLUMN_MIN_WIDTH}px, 1fr))` }}
                     >
-                        {visibleDays.map((dayIndex, visibleIndex) => (
+                        {visibleDateKeys.map((dateKey, visibleIndex) => (
                             <DayColumn
-                                key={dayIndex}
-                                dayIndex={dayIndex}
+                                key={dateKey}
+                                dateKey={dateKey}
                                 visibleIndex={visibleIndex}
-                                visibleDays={visibleDays}
-                                items={itemsByDay[dayIndex] ?? []}
-                                layout={layoutByDay[dayIndex]}
+                                visibleDateKeys={visibleDateKeys}
+                                items={itemsByDate[dateKey] ?? []}
+                                layout={layoutByDate[dateKey]}
                                 pxPerMin={pxPerMin}
                                 gridMin={gridMin}
                                 defaultDurationMin={defaultDurationMin}
-                                nowMin={nowMin}
+                                nowMin={dateKey === todayKey ? nowMin : null}
                                 viewStartMin={viewStartMin}
                                 viewEndMin={viewEndMin}
                                 heightPx={gridHeightPx}

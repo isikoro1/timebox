@@ -9,12 +9,12 @@ import { useNowMin } from "../hooks/useNowMin"
 import { useSelection } from "../hooks/useSelection"
 import { useTimeboxingItems } from "../hooks/useTimeboxingItems"
 import { type ViewMode, type ZoomLevel, useViewOptions } from "../hooks/useViewOptions"
+import { formatDateHeader } from "../lib/date"
 import { parseEventItems } from "../lib/storage"
 
 const STORAGE_KEY = "timeboxing-tool:v1:week-items"
 const GRID_MIN = 15
 const DEFAULT_DURATION = 30
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const VIEW_MODE_LABELS: Record<ViewMode, string> = {
     day: "1 day",
     "3days": "3 days",
@@ -60,13 +60,13 @@ export default function Home() {
         setViewMode,
         zoom,
         setZoom,
-        centerDay,
+        centerDateKey,
         shiftCenter,
         goToday,
         pxPerMin,
         viewStartMin,
         viewEndMin,
-        visibleDays,
+        visibleDateKeys,
     } = useViewOptions()
 
     const { selectedId, selectedAnchor, selectedItem, open, close } = useSelection(items)
@@ -78,7 +78,7 @@ export default function Home() {
         () =>
             items.map((item) => ({
                 id: item.id,
-                dayIndex: item.dayIndex,
+                dateKey: item.dateKey,
                 startMin: item.startMin,
                 endMin: item.endMin,
                 label: item.label,
@@ -154,9 +154,9 @@ export default function Home() {
         close()
     }
 
-    const onAddQuick = (dayIndex: number, startMin: number, endMin: number) => {
+    const onAddQuick = (dateKey: string, startMin: number, endMin: number) => {
         setQuickAdd({
-            dayIndex,
+            dateKey,
             startMin,
             endMin,
             label: "",
@@ -170,7 +170,7 @@ export default function Home() {
 
         const item: EventItem = {
             id: crypto.randomUUID(),
-            dayIndex: quickAdd.dayIndex,
+            dateKey: quickAdd.dateKey,
             startMin: quickAdd.startMin,
             endMin: quickAdd.endMin,
             label,
@@ -215,7 +215,7 @@ export default function Home() {
     }
 
     const showDayNavigator = viewMode !== "week"
-    const dayLabel = DAY_NAMES[centerDay]
+    const dayLabel = formatDateHeader(centerDateKey)
 
     return (
         <main className="flex h-screen flex-col overflow-hidden bg-gray-50 text-gray-900">
@@ -266,7 +266,7 @@ export default function Home() {
                 <div className="min-h-0 flex-1">
                     <WeekGrid
                         items={items}
-                        visibleDays={visibleDays}
+                        visibleDateKeys={visibleDateKeys}
                         gridMin={GRID_MIN}
                         defaultDurationMin={DEFAULT_DURATION}
                         pxPerMin={pxPerMin}

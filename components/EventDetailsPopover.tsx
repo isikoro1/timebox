@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef } from "react"
+import { formatDateHeader } from "../lib/date"
 import { minToHHMM } from "../lib/time"
 import type { EventItem } from "./WeekGrid"
 
@@ -25,7 +26,6 @@ function safeHttpUrl(raw: string): string | null {
 export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDelete }: Props) {
     const ref = useRef<HTMLDivElement | null>(null)
 
-    // 右側に出して、画面外に出たらクランプ
     const style = useMemo(() => {
         const margin = 8
         const w = 360
@@ -63,7 +63,7 @@ export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDel
         }
     }, [onClose])
 
-    const timeLabel = `${minToHHMM(item.startMin)}–${minToHHMM(item.endMin)}`
+    const timeLabel = `${formatDateHeader(item.dateKey)} ${minToHHMM(item.startMin)}-${minToHHMM(item.endMin)}`
 
     return (
         <div
@@ -74,9 +74,9 @@ export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDel
             aria-label="Event details"
         >
             <div className="flex items-center justify-between border-b px-3 py-2">
-                <div className="text-sm font-semibold text-gray-900">詳細</div>
+                <div className="text-sm font-semibold text-gray-900">Details</div>
                 <button className="rounded px-2 py-1 text-sm hover:bg-gray-100" onClick={onClose}>
-                    ×
+                    x
                 </button>
             </div>
 
@@ -84,7 +84,7 @@ export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDel
                 <div className="text-xs text-gray-700">{timeLabel}</div>
 
                 <div>
-                    <div className="text-xs font-medium text-gray-700">ラベル</div>
+                    <div className="text-xs font-medium text-gray-700">Label</div>
                     <input
                         className="mt-1 w-full rounded border px-2 py-1 text-sm"
                         value={item.label}
@@ -93,7 +93,7 @@ export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDel
                 </div>
 
                 <div>
-                    <div className="text-xs font-medium text-gray-700">メモ</div>
+                    <div className="text-xs font-medium text-gray-700">Memo</div>
                     <textarea
                         className="mt-1 h-24 w-full resize-none rounded border px-2 py-1 text-sm"
                         value={item.description ?? ""}
@@ -108,12 +108,12 @@ export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDel
                             className="rounded border bg-white px-2 py-1 text-xs hover:bg-gray-50"
                             onClick={() => onChange({ urls: [...(item.urls ?? []), ""] })}
                         >
-                            + 追加
+                            + Add
                         </button>
                     </div>
 
                     {(item.urls ?? []).length === 0 ? (
-                        <div className="mt-2 text-xs text-gray-500">リンクなし</div>
+                        <div className="mt-2 text-xs text-gray-500">No links</div>
                     ) : (
                         <div className="mt-2 space-y-2">
                             {(item.urls ?? []).map((u: string, idx: number) => {
@@ -139,11 +139,12 @@ export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDel
                                             }}
                                             aria-label="remove url"
                                         >
-                                            −
+                                            -
                                         </button>
                                         <a
-                                            className={`rounded border bg-white px-2 py-1 text-sm hover:bg-gray-50 ${valid ? "" : "pointer-events-none opacity-50"
-                                                }`}
+                                            className={`rounded border bg-white px-2 py-1 text-sm hover:bg-gray-50 ${
+                                                valid ? "" : "pointer-events-none opacity-50"
+                                            }`}
                                             href={valid ?? "#"}
                                             target="_blank"
                                             rel="noreferrer noopener"
@@ -162,11 +163,9 @@ export function EventDetailsPopover({ item, anchorRect, onClose, onChange, onDel
                         className="rounded border bg-white px-3 py-2 text-sm hover:bg-gray-50"
                         onClick={onDelete}
                     >
-                        削除
+                        Delete
                     </button>
-                    <div className="text-xs text-gray-500">
-                        Escで閉じる / 外側クリックで閉じる
-                    </div>
+                    <div className="text-xs text-gray-500">Esc or outside click closes this panel.</div>
                 </div>
             </div>
         </div>

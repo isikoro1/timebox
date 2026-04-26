@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react"
+import { toDateKey } from "../lib/date"
 
 export type AlarmEvent = {
     id: string
-    dayIndex: number // 0..6 (Mon..Sun)
+    dateKey: string
     startMin: number
     endMin: number
     label: string
@@ -198,29 +199,23 @@ function getAudioContext(audioCtxRef: MutableRefObject<AudioContext | null>) {
 
 function getTodaySchedule(items: AlarmEvent[], leadMin: number, nowMs: number): ScheduledAlarmEvent[] {
     const now = new Date(nowMs)
-    const todayIndex = getMonBasedDayIndex(now)
+    const todayKey = toDateKey(now)
     const startOfToday = new Date(now)
     startOfToday.setHours(0, 0, 0, 0)
-    const dayKey = `${startOfToday.getFullYear()}-${pad(startOfToday.getMonth() + 1)}-${pad(startOfToday.getDate())}`
 
     return items
-        .filter((x) => x.dayIndex === todayIndex)
+        .filter((x) => x.dateKey === todayKey)
         .map((x) => {
             const alarmMin = Math.max(0, x.startMin - leadMin)
             return {
                 ...x,
                 alarmMin,
                 targetMs: startOfToday.getTime() + alarmMin * 60_000,
-                fireKey: `${dayKey}:${x.id}:${alarmMin}:${x.startMin}:${x.endMin}`,
+                fireKey: `${todayKey}:${x.id}:${alarmMin}:${x.startMin}:${x.endMin}`,
             }
         })
         .filter((x) => x.alarmMin >= 0 && x.alarmMin <= 1440)
         .sort((a, b) => a.targetMs - b.targetMs)
-}
-
-function getMonBasedDayIndex(date: Date) {
-    const js = date.getDay() // 0=Sun..6=Sat
-    return (js + 6) % 7 // Mon=0..Sun=6
 }
 
 function pad(min: number) {

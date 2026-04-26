@@ -7,9 +7,9 @@ import type { LayoutInfo } from "./layout"
 import { EventBlock } from "./EventBlock"
 
 export function DayColumn({
-    dayIndex,
+    dateKey,
     visibleIndex,
-    visibleDays,
+    visibleDateKeys,
     items,
     layout,
     pxPerMin,
@@ -24,9 +24,9 @@ export function DayColumn({
     onMoveEvent,
     onSelectEvent,
 }: {
-    dayIndex: number
+    dateKey: string
     visibleIndex: number
-    visibleDays: number[]
+    visibleDateKeys: string[]
     items: EventItem[]
     layout: Map<string, LayoutInfo>
     pxPerMin: number
@@ -37,8 +37,8 @@ export function DayColumn({
     viewEndMin: number
     heightPx: number
     selectedId: string | null
-    onDoubleClickEmpty: (dayIndex: number, startMin: number, endMin: number) => void
-    onMoveEvent: (id: string, next: { dayIndex: number; startMin: number; endMin: number }) => void
+    onDoubleClickEmpty: (dateKey: string, startMin: number, endMin: number) => void
+    onMoveEvent: (id: string, next: { dateKey: string; startMin: number; endMin: number }) => void
     onSelectEvent: (id: string, rect: DOMRect) => void
 }) {
     const startHour = Math.floor(viewStartMin / 60)
@@ -56,7 +56,7 @@ export function DayColumn({
                 const rawMin = viewStartMin + y / pxPerMin
                 const startMin = clamp(snap(rawMin, gridMin), 0, 1440 - defaultDurationMin)
                 const endMin = startMin + defaultDurationMin
-                onDoubleClickEmpty(dayIndex, startMin, endMin)
+                onDoubleClickEmpty(dateKey, startMin, endMin)
             }}
         >
             {Array.from({ length: endHour - startHour + 1 }).map((_, i) => {
@@ -80,7 +80,7 @@ export function DayColumn({
                     gridMin={gridMin}
                     viewStartMin={viewStartMin}
                     viewEndMin={viewEndMin}
-                    visibleDays={visibleDays}
+                    visibleDateKeys={visibleDateKeys}
                     selected={selectedId === it.id}
                     onMoveEvent={onMoveEvent}
                     onSelectEvent={onSelectEvent}

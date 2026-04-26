@@ -1,38 +1,35 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { addDays, getTodayDateKey, getWeekStartDateKey } from "../lib/date"
 
 export type ViewMode = "day" | "3days" | "week"
 export type ZoomLevel = 75 | 100 | 150 | 200
-
-function getTodayMonBasedIndex(): number {
-    const jsDay = new Date().getDay()
-    return (jsDay + 6) % 7
-}
 
 export function useViewOptions() {
     const [startAtMidnight, setStartAtMidnight] = useState(false)
     const [viewMode, setViewMode] = useState<ViewMode>("week")
     const [zoom, setZoom] = useState<ZoomLevel>(100)
-    const [centerDay, setCenterDay] = useState<number>(getTodayMonBasedIndex)
+    const [centerDateKey, setCenterDateKey] = useState<string>(getTodayDateKey)
 
     const pxPerMin = 0.96 * (zoom / 100)
     const viewStartMin = startAtMidnight ? 0 : 6 * 60
     const viewEndMin = 24 * 60
 
-    const visibleDays = useMemo(() => {
-        if (viewMode === "week") return [0, 1, 2, 3, 4, 5, 6]
-        if (viewMode === "day") return [centerDay]
-        if (centerDay <= 1) return [0, 1, 2]
-        if (centerDay >= 5) return [4, 5, 6]
-        return [centerDay - 1, centerDay, centerDay + 1]
-    }, [centerDay, viewMode])
+    const visibleDateKeys = useMemo(() => {
+        if (viewMode === "week") {
+            const start = getWeekStartDateKey(centerDateKey)
+            return Array.from({ length: 7 }, (_, index) => addDays(start, index))
+        }
+        if (viewMode === "day") return [centerDateKey]
+        return [-1, 0, 1].map((offset) => addDays(centerDateKey, offset))
+    }, [centerDateKey, viewMode])
 
     const shiftCenter = (delta: number) => {
-        setCenterDay((current) => Math.max(0, Math.min(6, current + delta)))
+        setCenterDateKey((current) => addDays(current, delta))
     }
 
-    const goToday = () => setCenterDay(getTodayMonBasedIndex())
+    const goToday = () => setCenterDateKey(getTodayDateKey())
 
     return {
         startAtMidnight,
@@ -41,13 +38,13 @@ export function useViewOptions() {
         setViewMode,
         zoom,
         setZoom,
-        centerDay,
-        setCenterDay,
+        centerDateKey,
+        setCenterDateKey,
         shiftCenter,
         goToday,
         pxPerMin,
         viewStartMin,
         viewEndMin,
-        visibleDays,
+        visibleDateKeys,
     }
 }
