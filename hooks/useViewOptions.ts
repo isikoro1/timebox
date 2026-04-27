@@ -3,36 +3,43 @@
 import { useMemo, useState } from "react"
 import { addDays, getTodayDateKey } from "../lib/date"
 
-export type ViewMode = "day" | "3days" | "week"
-export type ZoomLevel = 75 | 100 | 150 | 200
+export const MIN_VISIBLE_DAY_COUNT = 1
+export const MAX_VISIBLE_DAY_COUNT = 31
+export const MIN_ZOOM = 75
+export const MAX_ZOOM = 200
+export const ZOOM_STEP = 5
 
 export function useViewOptions() {
-    const [startAtMidnight, setStartAtMidnight] = useState(false)
-    const [viewMode, setViewMode] = useState<ViewMode>("week")
-    const [zoom, setZoom] = useState<ZoomLevel>(100)
+    const [startHour, setStartHour] = useState(6)
+    const [visibleDayCount, setVisibleDayCount] = useState(7)
+    const [zoom, setZoom] = useState(100)
     const [centerDateKey, setCenterDateKey] = useState<string>(getTodayDateKey)
 
     const pxPerMin = 0.96 * (zoom / 100)
-    const viewStartMin = startAtMidnight ? 0 : 6 * 60
+    const viewStartMin = startHour * 60
     const viewEndMin = 24 * 60
 
     const visibleDateKeys = useMemo(() => {
-        if (viewMode === "week") return Array.from({ length: 7 }, (_, index) => addDays(centerDateKey, index))
-        if (viewMode === "day") return [centerDateKey]
-        return Array.from({ length: 3 }, (_, index) => addDays(centerDateKey, index))
-    }, [centerDateKey, viewMode])
+        return Array.from({ length: visibleDayCount }, (_, index) => addDays(centerDateKey, index))
+    }, [centerDateKey, visibleDayCount])
 
     const shiftCenter = (delta: number) => {
         setCenterDateKey((current) => addDays(current, delta))
     }
 
     const goToday = () => setCenterDateKey(getTodayDateKey())
+    const updateVisibleDayCount = (next: number | ((current: number) => number)) => {
+        setVisibleDayCount((current) => {
+            const value = typeof next === "function" ? next(current) : next
+            return Math.min(MAX_VISIBLE_DAY_COUNT, Math.max(MIN_VISIBLE_DAY_COUNT, value))
+        })
+    }
 
     return {
-        startAtMidnight,
-        setStartAtMidnight,
-        viewMode,
-        setViewMode,
+        startHour,
+        setStartHour,
+        visibleDayCount,
+        setVisibleDayCount: updateVisibleDayCount,
         zoom,
         setZoom,
         centerDateKey,

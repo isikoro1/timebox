@@ -8,23 +8,16 @@ import { useAlarm } from "../hooks/useAlarm"
 import { useNowMin } from "../hooks/useNowMin"
 import { useSelection } from "../hooks/useSelection"
 import { useTimeboxingItems } from "../hooks/useTimeboxingItems"
-import { type ViewMode, type ZoomLevel, useViewOptions } from "../hooks/useViewOptions"
+import { MAX_ZOOM, MIN_ZOOM, ZOOM_STEP, useViewOptions } from "../hooks/useViewOptions"
 import { formatDateHeader, getTodayDateKey, parseDateKey, toDateKey } from "../lib/date"
+import { formatJapaneseEraYear } from "../lib/japaneseCalendar"
 import { parseEventItems } from "../lib/storage"
 
 const STORAGE_KEY = "timeboxing-tool:v1:week-items"
 const GRID_MIN = 15
 const DEFAULT_DURATION = 30
-const VIEW_MODE_LABELS: Record<ViewMode, string> = {
-    day: "1 day",
-    "3days": "3 days",
-    week: "Week",
-}
-const ZOOM_OPTIONS: ZoomLevel[] = [75, 100, 150, 200]
 const BUTTON_CLASS =
     "rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-const ACTIVE_BUTTON_CLASS =
-    "rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
 const SETTINGS_SECTION_CLASS = "space-y-3 border-t border-gray-100 pt-4 first:border-t-0 first:pt-0"
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 
@@ -47,7 +40,8 @@ function downloadJson(items: EventItem[]) {
 
 function getMonthLabel(dateKey: string) {
     const date = parseDateKey(dateKey)
-    return `${date.getFullYear()} / ${date.getMonth() + 1}`
+    const monthName = date.toLocaleString("en-US", { month: "long" })
+    return `${monthName} ${date.getFullYear()} (${formatJapaneseEraYear(dateKey)})`
 }
 
 function addMonths(dateKey: string, delta: number) {
@@ -88,10 +82,10 @@ export default function Home() {
     const [calendarMonthKey, setCalendarMonthKey] = useState(getTodayDateKey)
 
     const {
-        startAtMidnight,
-        setStartAtMidnight,
-        viewMode,
-        setViewMode,
+        startHour,
+        setStartHour,
+        visibleDayCount,
+        setVisibleDayCount,
         zoom,
         setZoom,
         centerDateKey,
@@ -264,7 +258,6 @@ export default function Home() {
         }
     }
 
-    const showDayNavigator = viewMode !== "week"
     const dayLabel = formatDateHeader(centerDateKey)
     const visibleMonthLabel = getMonthLabel(visibleDateKeys[0] ?? centerDateKey)
     const todayKey = getTodayDateKey()
@@ -488,6 +481,8 @@ export default function Home() {
                     <WeekGrid
                         items={items}
                         visibleDateKeys={visibleDateKeys}
+                        visibleDayCount={visibleDayCount}
+                        onChangeVisibleDayCount={setVisibleDayCount}
                         gridMin={GRID_MIN}
                         defaultDurationMin={DEFAULT_DURATION}
                         pxPerMin={pxPerMin}
@@ -554,58 +549,42 @@ export default function Home() {
                         <div className="space-y-5 overflow-y-auto px-4 py-4">
                             <section className={SETTINGS_SECTION_CLASS}>
                                 <h3 className="text-sm font-semibold text-gray-900">View</h3>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {(Object.keys(VIEW_MODE_LABELS) as ViewMode[]).map((mode) => (
-                                        <button
-                                            key={mode}
-                                            className={viewMode === mode ? ACTIVE_BUTTON_CLASS : BUTTON_CLASS}
-                                            type="button"
-                                            onClick={() => setViewMode(mode)}
-                                        >
-                                            {VIEW_MODE_LABELS[mode]}
-                                        </button>
-                                    ))}
+                                <div className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600">
+                                    Focus: {dayLabel}
                                 </div>
-
-                                {showDayNavigator ? (
-                                    <div className="mt-3 grid grid-cols-3 gap-2">
-                                        <button className={BUTTON_CLASS} type="button" onClick={() => moveDate(-1)}>
-                                            Prev
-                                        </button>
-                                        <button className={BUTTON_CLASS} type="button" onClick={goToday}>
-                                            Today
-                                        </button>
-                                        <button className={BUTTON_CLASS} type="button" onClick={() => moveDate(1)}>
-                                            Next
-                                        </button>
-                                        <div className="col-span-3 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600">
-                                            Focus: {dayLabel}
-                                        </div>
-                                    </div>
-                                ) : null}
                             </section>
 
                             <section className={SETTINGS_SECTION_CLASS}>
                                 <h3 className="text-sm font-semibold text-gray-900">Timeline</h3>
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                                    {ZOOM_OPTIONS.map((option) => (
-                                        <button
-                                            key={option}
-                                            className={zoom === option ? ACTIVE_BUTTON_CLASS : BUTTON_CLASS}
-                                            type="button"
-                                            onClick={() => setZoom(option)}
-                                        >
-                                            {option}%
-                                        </button>
-                                    ))}
-                                </div>
-                                <button
-                                    className={`${BUTTON_CLASS} mt-3 w-full`}
-                                    type="button"
-                                    onClick={() => setStartAtMidnight(!startAtMidnight)}
-                                >
-                                    {startAtMidnight ? "Start timeline at 6:00" : "Start timeline at 0:00"}
-                                </button>
+                                <label className="block text-sm text-gray-700">
+                                    <div className="mb-2 flex items-center justify-between gap-3">
+                                        <span>Scale</span>
+                                        <span className="font-semibold tabular-nums text-gray-900">{zoom}%</span>
+                                    </div>
+                                    <input
+                                        className="w-full accent-blue-600"
+                                        type="range"
+                                        min={MIN_ZOOM}
+                                        max={MAX_ZOOM}
+                                        step={ZOOM_STEP}
+                                        value={zoom}
+                                        onChange={(event) => setZoom(Number(event.target.value))}
+                                    />
+                                </label>
+                                <label className="mt-4 block text-sm text-gray-700">
+                                    <div className="mb-2">Start hour</div>
+                                    <select
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
+                                        value={startHour}
+                                        onChange={(event) => setStartHour(Number(event.target.value))}
+                                    >
+                                        {Array.from({ length: 13 }, (_, hour) => (
+                                            <option key={hour} value={hour}>
+                                                {hour}:00
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
                             </section>
 
                             <section className={SETTINGS_SECTION_CLASS}>
