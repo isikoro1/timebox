@@ -16,7 +16,7 @@ export type EventItem = {
     description?: string
 }
 
-const TIME_COLUMN_WIDTH = 92
+const TIME_COLUMN_WIDTH = 56
 
 type LayoutInfo = { lane: 0 | 1; lanesCount: 1 | 2 }
 
@@ -75,8 +75,6 @@ export function WeekGrid({
     viewStartMin,
     viewEndMin,
     visibleDateKeys,
-    visibleDayCount,
-    onChangeVisibleDayCount,
     selectedId,
     onAddQuick,
     onDoubleClickEmpty,
@@ -92,8 +90,6 @@ export function WeekGrid({
     viewStartMin: number
     viewEndMin: number
     visibleDateKeys: string[]
-    visibleDayCount: number
-    onChangeVisibleDayCount: (next: number | ((current: number) => number)) => void
     selectedId: string | null
     onAddQuick?: (dateKey: string, startMin: number, endMin: number) => void
     onDoubleClickEmpty?: (dateKey: string, startMin: number, endMin: number) => void
@@ -144,29 +140,7 @@ export function WeekGrid({
                     className="sticky top-0 z-30 grid border-b border-gray-200 bg-gray-50/95 backdrop-blur"
                     style={{ gridTemplateColumns: headerColumns }}
                 >
-                    <div className="sticky left-0 z-40 border-r border-gray-200 bg-gray-50/95 p-1.5 text-gray-700">
-                        <div className="flex items-center justify-center gap-1" aria-label="Visible days">
-                            <button
-                                className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-sm font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                type="button"
-                                aria-label="Show fewer days"
-                                disabled={visibleDayCount <= 1}
-                                onClick={() => onChangeVisibleDayCount((current) => current - 1)}
-                            >
-                                -
-                            </button>
-                            <span className="w-5 text-center text-xs font-semibold tabular-nums">{visibleDayCount}</span>
-                            <button
-                                className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-sm font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                type="button"
-                                aria-label="Show more days"
-                                disabled={visibleDayCount >= 31}
-                                onClick={() => onChangeVisibleDayCount((current) => current + 1)}
-                            >
-                                +
-                            </button>
-                        </div>
-                    </div>
+                    <div className="sticky left-0 z-40 border-r border-gray-200 bg-gray-50/95" aria-hidden="true" />
                     {visibleDateKeys.map((dateKey) => {
                         const isToday = dateKey === todayKey
                         const [dayName, dateLabel] = formatDateHeader(dateKey).split(" ")
