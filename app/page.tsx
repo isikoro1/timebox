@@ -1,6 +1,6 @@
 "use client"
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
+import { ChangeEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react"
 import { QuickAddModal, type QuickAddState } from "../components/QuickAddModal"
 import { EventDetailsPopover } from "../components/EventDetailsPopover"
 import { type EventItem, WeekGrid } from "../components/WeekGrid"
@@ -20,6 +20,8 @@ const BUTTON_CLASS =
     "rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
 const SETTINGS_SECTION_CLASS = "space-y-3 border-t border-gray-100 pt-4 first:border-t-0 first:pt-0"
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
+const SWIPE_MIN_X = 64
+const SWIPE_MAX_TAP_MS = 700
 
 function buildExportFilename() {
     const stamp = new Date().toISOString().slice(0, 10)
@@ -91,7 +93,6 @@ export default function Home() {
         centerDateKey,
         setCenterDateKey,
         shiftCenter,
-        goToday,
         pxPerMin,
         viewStartMin,
         viewEndMin,
@@ -102,6 +103,7 @@ export default function Home() {
     const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null)
     const clipboardRef = useRef<EventItem | null>(null)
     const importInputRef = useRef<HTMLInputElement | null>(null)
+    const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null)
 
     const alarmItems = useMemo(
         () =>
@@ -268,6 +270,32 @@ export default function Home() {
         setCalendarMonthKey(dateKey)
         setCalendarOpen(false)
     }
+    const jumpToToday = () => jumpToDate(todayKey)
+    const startSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.pointerType !== "touch") return
+
+        const target = event.target as HTMLElement | null
+        if (target?.closest('button, input, textarea, select, a, [data-eventblock="1"]')) return
+
+        swipeStartRef.current = {
+            x: event.clientX,
+            y: event.clientY,
+            time: Date.now(),
+        }
+    }
+    const finishSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const start = swipeStartRef.current
+        swipeStartRef.current = null
+        if (!start || event.pointerType !== "touch") return
+
+        const dx = event.clientX - start.x
+        const dy = event.clientY - start.y
+        const elapsed = Date.now() - start.time
+        if (elapsed > SWIPE_MAX_TAP_MS) return
+        if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * 1.4) return
+
+        moveDate(dx < 0 ? 1 : -1)
+    }
 
     return (
         <main className="flex h-screen flex-col overflow-hidden bg-gray-50 text-gray-900">
@@ -275,7 +303,7 @@ export default function Home() {
                 {visibleMonthLabel}
             </div>
 
-            <div className="fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-gray-200 bg-white/95 p-1 shadow-lg shadow-gray-900/10 backdrop-blur sm:bottom-4">
+            <div className="fixed bottom-3 left-1/2 z-40 hidden -translate-x-1/2 items-center gap-2 rounded-full border border-gray-200 bg-white/95 p-1 shadow-lg shadow-gray-900/10 backdrop-blur sm:bottom-4 sm:flex">
                 <button
                     className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
                     type="button"
@@ -294,13 +322,6 @@ export default function Home() {
                     >
                         <path d="m15 18-6-6 6-6" />
                     </svg>
-                </button>
-                <button
-                    className="h-9 rounded-full px-3 text-sm font-semibold text-gray-800 transition hover:bg-gray-100"
-                    type="button"
-                    onClick={goToday}
-                >
-                    Today
                 </button>
                 <button
                     className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
@@ -343,7 +364,30 @@ export default function Home() {
                     <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1A1.7 1.7 0 0 0 9 4.7a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
                 </svg>
             </button>
-            <div className="fixed right-3 top-16 z-40 sm:right-4 sm:top-[4.25rem]" data-calendar-root="1">
+            <div className="fixed right-16 top-3 z-40 flex h-11 items-center gap-1 rounded-full border border-gray-200 bg-white/95 p-1 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur sm:right-[4.25rem] sm:top-4">
+                <button
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    type="button"
+                    aria-label="Show fewer days"
+                    disabled={visibleDayCount <= 1}
+                    onClick={() => setVisibleDayCount((current) => current - 1)}
+                >
+                    -
+                </button>
+                <span className="w-6 text-center text-sm font-semibold tabular-nums" aria-label="Visible days">
+                    {visibleDayCount}
+                </span>
+                <button
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    type="button"
+                    aria-label="Show more days"
+                    disabled={visibleDayCount >= 31}
+                    onClick={() => setVisibleDayCount((current) => current + 1)}
+                >
+                    +
+                </button>
+            </div>
+            <div className="fixed right-3 top-16 z-50 sm:right-4 sm:top-[4.25rem]" data-calendar-root="1">
                 <button
                     className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur transition hover:bg-white"
                     type="button"
@@ -418,6 +462,13 @@ export default function Home() {
                                 </svg>
                             </button>
                         </div>
+                        <button
+                            className="mb-3 h-9 w-full rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
+                            type="button"
+                            onClick={jumpToToday}
+                        >
+                            Today
+                        </button>
 
                         <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-gray-500">
                             {WEEKDAY_LABELS.map((label) => (
@@ -477,12 +528,17 @@ export default function Home() {
             />
 
             <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col p-2 pb-16 pt-16 sm:p-4 sm:pb-16 sm:pt-16">
-                <div className="min-h-0 flex-1">
+                <div
+                    className="min-h-0 flex-1 touch-pan-y"
+                    onPointerDown={startSwipe}
+                    onPointerUp={finishSwipe}
+                    onPointerCancel={() => {
+                        swipeStartRef.current = null
+                    }}
+                >
                     <WeekGrid
                         items={items}
                         visibleDateKeys={visibleDateKeys}
-                        visibleDayCount={visibleDayCount}
-                        onChangeVisibleDayCount={setVisibleDayCount}
                         gridMin={GRID_MIN}
                         defaultDurationMin={DEFAULT_DURATION}
                         pxPerMin={pxPerMin}
