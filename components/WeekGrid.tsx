@@ -3,6 +3,7 @@
 import React from "react"
 import { DayColumn } from "./week/DayColumn"
 import { formatDateHeader, getTodayDateKey } from "../lib/date"
+import { getJapaneseHolidayName } from "../lib/japaneseCalendar"
 import { minToHHMM } from "../lib/time"
 
 export type EventItem = {
@@ -15,7 +16,7 @@ export type EventItem = {
     description?: string
 }
 
-const TIME_COLUMN_WIDTH = 52
+const TIME_COLUMN_WIDTH = 92
 
 type LayoutInfo = { lane: 0 | 1; lanesCount: 1 | 2 }
 
@@ -74,6 +75,8 @@ export function WeekGrid({
     viewStartMin,
     viewEndMin,
     visibleDateKeys,
+    visibleDayCount,
+    onChangeVisibleDayCount,
     selectedId,
     onAddQuick,
     onDoubleClickEmpty,
@@ -89,6 +92,8 @@ export function WeekGrid({
     viewStartMin: number
     viewEndMin: number
     visibleDateKeys: string[]
+    visibleDayCount: number
+    onChangeVisibleDayCount: (next: number | ((current: number) => number)) => void
     selectedId: string | null
     onAddQuick?: (dateKey: string, startMin: number, endMin: number) => void
     onDoubleClickEmpty?: (dateKey: string, startMin: number, endMin: number) => void
@@ -115,7 +120,9 @@ export function WeekGrid({
 
     const startHour = Math.floor(viewStartMin / 60)
     const endHour = Math.floor(viewEndMin / 60)
-    const headerColumns = `${TIME_COLUMN_WIDTH}px repeat(${visibleDateKeys.length}, minmax(0, 1fr))`
+    const dayColumnMin = visibleDateKeys.length > 7 ? 112 : 0
+    const dayColumnTemplate = `repeat(${visibleDateKeys.length}, minmax(${dayColumnMin}px, 1fr))`
+    const headerColumns = `${TIME_COLUMN_WIDTH}px ${dayColumnTemplate}`
     const handleEmpty = onAddQuick ?? onDoubleClickEmpty ?? (() => {})
     const todayKey = getTodayDateKey()
     const todayIndex = visibleDateKeys.indexOf(todayKey)
@@ -124,7 +131,7 @@ export function WeekGrid({
 
     return (
         <div
-            className="h-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-xl border border-gray-200 bg-white"
+            className="h-full overflow-auto overscroll-contain rounded-xl border border-gray-200 bg-white"
             onMouseDown={(event) => {
                 if (!onDeselect) return
                 const target = event.target as HTMLElement
@@ -137,12 +144,33 @@ export function WeekGrid({
                     className="sticky top-0 z-30 grid border-b border-gray-200 bg-gray-50/95 backdrop-blur"
                     style={{ gridTemplateColumns: headerColumns }}
                 >
-                    <div className="sticky left-0 z-40 border-r border-gray-200 bg-gray-50/95 p-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                        Time
+                    <div className="sticky left-0 z-40 border-r border-gray-200 bg-gray-50/95 p-1.5 text-gray-700">
+                        <div className="flex items-center justify-center gap-1" aria-label="Visible days">
+                            <button
+                                className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-sm font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                type="button"
+                                aria-label="Show fewer days"
+                                disabled={visibleDayCount <= 1}
+                                onClick={() => onChangeVisibleDayCount((current) => current - 1)}
+                            >
+                                -
+                            </button>
+                            <span className="w-5 text-center text-xs font-semibold tabular-nums">{visibleDayCount}</span>
+                            <button
+                                className="flex h-6 w-6 items-center justify-center rounded-md border border-gray-200 bg-white text-sm font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                type="button"
+                                aria-label="Show more days"
+                                disabled={visibleDayCount >= 31}
+                                onClick={() => onChangeVisibleDayCount((current) => current + 1)}
+                            >
+                                +
+                            </button>
+                        </div>
                     </div>
                     {visibleDateKeys.map((dateKey) => {
                         const isToday = dateKey === todayKey
                         const [dayName, dateLabel] = formatDateHeader(dateKey).split(" ")
+                        const holidayName = getJapaneseHolidayName(dateKey)
                         return (
                             <div
                                 key={dateKey}
@@ -152,6 +180,11 @@ export function WeekGrid({
                             >
                                 <div className="truncate leading-4">{dayName}</div>
                                 <div className="truncate leading-4">{dateLabel}</div>
+                                {holidayName ? (
+                                    <div className="mt-0.5 truncate text-[10px] font-semibold leading-3 text-rose-600">
+                                        {holidayName}
+                                    </div>
+                                ) : null}
                                 {isToday ? (
                                     <div className="mt-0.5 inline-flex max-w-full rounded-full bg-red-100 px-1 py-0.5 text-[9px] font-semibold leading-none text-red-700">
                                         Today
@@ -181,7 +214,7 @@ export function WeekGrid({
                     <div
                         className="relative grid flex-1"
                         data-daygrid="1"
-                        style={{ gridTemplateColumns: `repeat(${visibleDateKeys.length}, minmax(0, 1fr))` }}
+                        style={{ gridTemplateColumns: dayColumnTemplate }}
                     >
                         {visibleDateKeys.map((dateKey, visibleIndex) => (
                             <DayColumn
