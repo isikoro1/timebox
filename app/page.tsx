@@ -22,6 +22,17 @@ const SETTINGS_SECTION_CLASS = "space-y-3 border-t border-gray-100 pt-4 first:bo
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 const SWIPE_MIN_X = 64
 const SWIPE_MAX_TAP_MS = 700
+const SWIPE_VERTICAL_CANCEL_Y = 32
+const SWIPE_HORIZONTAL_RATIO = 1.4
+const SWIPE_EXCLUDED_TARGETS = 'button, input, textarea, select, a, [data-eventblock="1"]'
+
+type SwipeStart = {
+    pointerId: number
+    x: number
+    y: number
+    time: number
+    cancelled: boolean
+}
 
 function buildExportFilename() {
     const stamp = new Date().toISOString().slice(0, 10)
@@ -103,7 +114,7 @@ export default function Home() {
     const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null)
     const clipboardRef = useRef<EventItem | null>(null)
     const importInputRef = useRef<HTMLInputElement | null>(null)
-    const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null)
+    const swipeStartRef = useRef<SwipeStart | null>(null)
 
     const alarmItems = useMemo(
         () =>
@@ -272,27 +283,39 @@ export default function Home() {
     }
     const jumpToToday = () => jumpToDate(todayKey)
     const startSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.pointerType !== "touch") return
+        if (event.pointerType !== "touch" || !event.isPrimary) return
 
         const target = event.target as HTMLElement | null
-        if (target?.closest('button, input, textarea, select, a, [data-eventblock="1"]')) return
+        if (target?.closest(SWIPE_EXCLUDED_TARGETS)) return
 
         swipeStartRef.current = {
+            pointerId: event.pointerId,
             x: event.clientX,
             y: event.clientY,
-            time: Date.now(),
+            time: performance.now(),
+            cancelled: false,
         }
+    }
+    const trackSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const start = swipeStartRef.current
+        if (!start || event.pointerId !== start.pointerId || event.pointerType !== "touch") return
+
+        const dx = event.clientX - start.x
+        const dy = event.clientY - start.y
+        const horizontalIntent = Math.abs(dx) >= Math.abs(dy) * SWIPE_HORIZONTAL_RATIO
+        const verticalIntent = Math.abs(dy) > SWIPE_VERTICAL_CANCEL_Y && !horizontalIntent
+        if (verticalIntent) start.cancelled = true
     }
     const finishSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
         const start = swipeStartRef.current
         swipeStartRef.current = null
-        if (!start || event.pointerType !== "touch") return
+        if (!start || start.cancelled || event.pointerId !== start.pointerId || event.pointerType !== "touch") return
 
         const dx = event.clientX - start.x
         const dy = event.clientY - start.y
-        const elapsed = Date.now() - start.time
+        const elapsed = performance.now() - start.time
         if (elapsed > SWIPE_MAX_TAP_MS) return
-        if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * 1.4) return
+        if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * SWIPE_HORIZONTAL_RATIO) return
 
         moveDate(dx < 0 ? 1 : -1)
     }
@@ -531,6 +554,7 @@ export default function Home() {
                 <div
                     className="min-h-0 flex-1 touch-pan-y"
                     onPointerDown={startSwipe}
+                    onPointerMove={trackSwipe}
                     onPointerUp={finishSwipe}
                     onPointerCancel={() => {
                         swipeStartRef.current = null
