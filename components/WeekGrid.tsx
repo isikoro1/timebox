@@ -2,7 +2,7 @@
 
 import React from "react"
 import { DayColumn } from "./week/DayColumn"
-import { formatDateHeader, getTodayDateKey } from "../lib/date"
+import { formatDateHeader, getTodayDateKey, parseDateKey } from "../lib/date"
 import { getJapaneseHolidayName } from "../lib/japaneseCalendar"
 import { minToHHMM } from "../lib/time"
 
@@ -19,6 +19,21 @@ export type EventItem = {
 const TIME_COLUMN_WIDTH = 56
 
 type LayoutInfo = { lane: 0 | 1; lanesCount: 1 | 2 }
+type DayTone = "weekday" | "saturday" | "rest"
+
+function getDayTone(dateKey: string, holidayName: string | null): DayTone {
+    const day = parseDateKey(dateKey).getDay()
+    if (holidayName || day === 0) return "rest"
+    if (day === 6) return "saturday"
+    return "weekday"
+}
+
+function getHeaderClass(isToday: boolean, dayTone: DayTone) {
+    if (isToday) return "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200"
+    if (dayTone === "rest") return "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-100"
+    if (dayTone === "saturday") return "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-100"
+    return "text-gray-800"
+}
 
 function computeTwoLaneLayout(items: EventItem[]): Map<string, LayoutInfo> {
     const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin)
@@ -75,6 +90,7 @@ export function WeekGrid({
     viewStartMin,
     viewEndMin,
     visibleDateKeys,
+    dayColumnMinWidth,
     selectedId,
     onAddQuick,
     onDoubleClickEmpty,
@@ -90,6 +106,7 @@ export function WeekGrid({
     viewStartMin: number
     viewEndMin: number
     visibleDateKeys: string[]
+    dayColumnMinWidth: number
     selectedId: string | null
     onAddQuick?: (dateKey: string, startMin: number, endMin: number) => void
     onDoubleClickEmpty?: (dateKey: string, startMin: number, endMin: number) => void
@@ -116,9 +133,9 @@ export function WeekGrid({
 
     const startHour = Math.floor(viewStartMin / 60)
     const endHour = Math.floor(viewEndMin / 60)
-    const dayColumnMin = visibleDateKeys.length > 7 ? 112 : 0
-    const dayColumnTemplate = `repeat(${visibleDateKeys.length}, minmax(${dayColumnMin}px, 1fr))`
+    const dayColumnTemplate = `repeat(${visibleDateKeys.length}, minmax(${dayColumnMinWidth}px, 1fr))`
     const headerColumns = `${TIME_COLUMN_WIDTH}px ${dayColumnTemplate}`
+    const contentMinWidth = TIME_COLUMN_WIDTH + dayColumnMinWidth * visibleDateKeys.length
     const handleEmpty = onAddQuick ?? onDoubleClickEmpty ?? (() => {})
     const todayKey = getTodayDateKey()
     const todayIndex = visibleDateKeys.indexOf(todayKey)
@@ -135,7 +152,7 @@ export function WeekGrid({
                 onDeselect()
             }}
         >
-            <div className="min-w-full">
+            <div className="min-w-full" style={{ minWidth: contentMinWidth }}>
                 <div
                     className="sticky top-0 z-30 grid border-b border-gray-200 bg-gray-50/95 backdrop-blur"
                     style={{ gridTemplateColumns: headerColumns }}
@@ -145,12 +162,14 @@ export function WeekGrid({
                         const isToday = dateKey === todayKey
                         const [dayName, dateLabel] = formatDateHeader(dateKey).split(" ")
                         const holidayName = getJapaneseHolidayName(dateKey)
+                        const dayTone = getDayTone(dateKey, holidayName)
                         return (
                             <div
                                 key={dateKey}
-                                className={`min-w-0 border-r border-gray-200 px-1 py-1.5 text-center text-xs font-semibold last:border-r-0 ${
-                                    isToday ? "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200" : "text-gray-800"
-                                }`}
+                                className={`min-w-0 border-r border-gray-200 px-1 py-1.5 text-center text-xs font-semibold last:border-r-0 ${getHeaderClass(
+                                    isToday,
+                                    dayTone
+                                )}`}
                             >
                                 <div className="truncate leading-4">{dayName}</div>
                                 <div className="truncate leading-4">{dateLabel}</div>
@@ -205,6 +224,7 @@ export function WeekGrid({
                                 viewEndMin={viewEndMin}
                                 heightPx={gridHeightPx}
                                 isToday={dateKey === todayKey}
+                                dayTone={getDayTone(dateKey, getJapaneseHolidayName(dateKey))}
                                 selectedId={selectedId}
                                 onDoubleClickEmpty={handleEmpty}
                                 onMoveEvent={onMoveEvent}
@@ -214,7 +234,7 @@ export function WeekGrid({
 
                         {showNowLine ? (
                             <div
-                                className="pointer-events-none absolute left-0 right-0 z-40 border-t-2 border-gray-700/65"
+                                className="pointer-events-none absolute left-0 right-0 z-10 border-t-2 border-gray-700/65"
                                 style={{ top: nowLineTop }}
                                 title={`now ${minToHHMM(nowMin)}`}
                                 aria-hidden="true"
