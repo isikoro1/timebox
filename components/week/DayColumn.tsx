@@ -6,6 +6,15 @@ import type { EventItem } from "@/components/WeekGrid"
 import type { LayoutInfo } from "./layout"
 import { EventBlock } from "./EventBlock"
 
+type DayTone = "weekday" | "saturday" | "rest"
+
+function getColumnClass(isToday: boolean, dayTone: DayTone) {
+    if (isToday) return "bg-red-50/40 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.35)]"
+    if (dayTone === "rest") return "bg-rose-50/30"
+    if (dayTone === "saturday") return "bg-sky-50/25"
+    return ""
+}
+
 export function DayColumn({
     dateKey,
     visibleIndex,
@@ -19,6 +28,7 @@ export function DayColumn({
     viewEndMin,
     heightPx,
     isToday,
+    dayTone,
     selectedId,
     onDoubleClickEmpty,
     onMoveEvent,
@@ -36,6 +46,7 @@ export function DayColumn({
     viewEndMin: number
     heightPx: number
     isToday: boolean
+    dayTone: DayTone
     selectedId: string | null
     onDoubleClickEmpty: (dateKey: string, startMin: number, endMin: number) => void
     onMoveEvent: (id: string, next: { dateKey: string; startMin: number; endMin: number }) => void
@@ -46,9 +57,7 @@ export function DayColumn({
 
     return (
         <div
-            className={`relative border-r last:border-r-0 select-none ${
-                isToday ? "bg-red-50/40 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.35)]" : ""
-            }`}
+            className={`relative border-r last:border-r-0 select-none ${getColumnClass(isToday, dayTone)}`}
             data-daycol="1"
             data-visible-index={visibleIndex}
             style={{ height: heightPx }}

@@ -8,7 +8,15 @@ import { useAlarm } from "../hooks/useAlarm"
 import { useNowMin } from "../hooks/useNowMin"
 import { useSelection } from "../hooks/useSelection"
 import { useTimeboxingItems } from "../hooks/useTimeboxingItems"
-import { MAX_ZOOM, MIN_ZOOM, ZOOM_STEP, useViewOptions } from "../hooks/useViewOptions"
+import {
+    DAY_WIDTH_ZOOM_STEP,
+    MAX_DAY_WIDTH_ZOOM,
+    MAX_ZOOM,
+    MIN_DAY_WIDTH_ZOOM,
+    MIN_ZOOM,
+    ZOOM_STEP,
+    useViewOptions,
+} from "../hooks/useViewOptions"
 import { formatDateHeader, getTodayDateKey, parseDateKey, toDateKey } from "../lib/date"
 import { formatJapaneseEraYear } from "../lib/japaneseCalendar"
 import { parseEventItems } from "../lib/storage"
@@ -25,13 +33,26 @@ const SWIPE_MAX_TAP_MS = 700
 const SWIPE_VERTICAL_CANCEL_Y = 32
 const SWIPE_HORIZONTAL_RATIO = 1.4
 const SWIPE_EXCLUDED_TARGETS = 'button, input, textarea, select, a, [data-eventblock="1"]'
+const PINCH_MIN_DISTANCE = 40
 
 type SwipeStart = {
     pointerId: number
+    pointerType: string
     x: number
     y: number
     time: number
     cancelled: boolean
+}
+
+type TouchPoint = {
+    x: number
+    y: number
+}
+
+type PinchStart = {
+    distance: number
+    zoom: number
+    dayWidthZoom: number
 }
 
 function buildExportFilename() {
@@ -83,6 +104,19 @@ function getMonthCalendarDays(monthDateKey: string) {
     })
 }
 
+function clamp(value: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, value))
+}
+
+function snapToStep(value: number, step: number) {
+    return Math.round(value / step) * step
+}
+
+function getPinchDistance(points: TouchPoint[]) {
+    if (points.length < 2) return 0
+    return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)
+}
+
 export default function Home() {
     const { items, setItems, loaded } = useTimeboxingItems(STORAGE_KEY)
     const nowMin = useNowMin(15000)
@@ -97,10 +131,11 @@ export default function Home() {
     const {
         startHour,
         setStartHour,
-        visibleDayCount,
-        setVisibleDayCount,
         zoom,
         setZoom,
+        dayWidthZoom,
+        setDayWidthZoom,
+        dayColumnMinWidth,
         centerDateKey,
         setCenterDateKey,
         shiftCenter,
@@ -115,6 +150,8 @@ export default function Home() {
     const clipboardRef = useRef<EventItem | null>(null)
     const importInputRef = useRef<HTMLInputElement | null>(null)
     const swipeStartRef = useRef<SwipeStart | null>(null)
+    const activeTouchPointsRef = useRef<Map<number, TouchPoint>>(new Map())
+    const pinchStartRef = useRef<PinchStart | null>(null)
 
     const alarmItems = useMemo(
         () =>
@@ -276,20 +313,63 @@ export default function Home() {
     const todayKey = getTodayDateKey()
     const calendarDays = getMonthCalendarDays(calendarMonthKey)
     const moveDate = (direction: -1 | 1) => shiftCenter(direction)
+    const zoomTimeline = (direction: -1 | 1) => setZoom((current) => current + direction * ZOOM_STEP)
+    const zoomDayWidth = (direction: -1 | 1) =>
+        setDayWidthZoom((current) => current + direction * DAY_WIDTH_ZOOM_STEP)
     const jumpToDate = (dateKey: string) => {
         setCenterDateKey(dateKey)
         setCalendarMonthKey(dateKey)
         setCalendarOpen(false)
     }
     const jumpToToday = () => jumpToDate(todayKey)
+    const beginPinch = () => {
+        const distance = getPinchDistance([...activeTouchPointsRef.current.values()])
+        if (distance < PINCH_MIN_DISTANCE) return
+
+        pinchStartRef.current = {
+            distance,
+            zoom,
+            dayWidthZoom,
+        }
+    }
+    const updatePinch = () => {
+        const pinchStart = pinchStartRef.current
+        if (!pinchStart) return
+
+        const distance = getPinchDistance([...activeTouchPointsRef.current.values()])
+        if (distance < PINCH_MIN_DISTANCE) return
+
+        const scale = distance / pinchStart.distance
+        const nextZoom = clamp(snapToStep(pinchStart.zoom * scale, ZOOM_STEP), MIN_ZOOM, MAX_ZOOM)
+        const nextDayWidthZoom = clamp(
+            snapToStep(pinchStart.dayWidthZoom * scale, DAY_WIDTH_ZOOM_STEP),
+            MIN_DAY_WIDTH_ZOOM,
+            MAX_DAY_WIDTH_ZOOM
+        )
+
+        setZoom(nextZoom)
+        setDayWidthZoom(nextDayWidthZoom)
+    }
     const startSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.pointerType !== "touch" || !event.isPrimary) return
+        if (event.pointerType === "touch") {
+            activeTouchPointsRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+            if (activeTouchPointsRef.current.size >= 2) {
+                swipeStartRef.current = null
+                beginPinch()
+                return
+            }
+        }
+
+        if (event.pointerType === "mouse" && event.button !== 0) return
+        if (event.pointerType !== "touch" && event.pointerType !== "mouse") return
 
         const target = event.target as HTMLElement | null
         if (target?.closest(SWIPE_EXCLUDED_TARGETS)) return
 
+        event.currentTarget.setPointerCapture(event.pointerId)
         swipeStartRef.current = {
             pointerId: event.pointerId,
+            pointerType: event.pointerType,
             x: event.clientX,
             y: event.clientY,
             time: performance.now(),
@@ -297,8 +377,17 @@ export default function Home() {
         }
     }
     const trackSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.pointerType === "touch" && activeTouchPointsRef.current.has(event.pointerId)) {
+            activeTouchPointsRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+            if (pinchStartRef.current) {
+                updatePinch()
+                return
+            }
+        }
+
         const start = swipeStartRef.current
-        if (!start || event.pointerId !== start.pointerId || event.pointerType !== "touch") return
+        if (!start || event.pointerId !== start.pointerId || event.pointerType !== start.pointerType) return
+        if (event.pointerType === "mouse" && event.buttons !== 1) return
 
         const dx = event.clientX - start.x
         const dy = event.clientY - start.y
@@ -307,9 +396,18 @@ export default function Home() {
         if (verticalIntent) start.cancelled = true
     }
     const finishSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.pointerType === "touch") {
+            activeTouchPointsRef.current.delete(event.pointerId)
+            if (pinchStartRef.current) {
+                if (activeTouchPointsRef.current.size < 2) pinchStartRef.current = null
+                swipeStartRef.current = null
+                return
+            }
+        }
+
         const start = swipeStartRef.current
         swipeStartRef.current = null
-        if (!start || start.cancelled || event.pointerId !== start.pointerId || event.pointerType !== "touch") return
+        if (!start || start.cancelled || event.pointerId !== start.pointerId || event.pointerType !== start.pointerType) return
 
         const dx = event.clientX - start.x
         const dy = event.clientY - start.y
@@ -388,24 +486,46 @@ export default function Home() {
                 </svg>
             </button>
             <div className="fixed right-16 top-3 z-40 flex h-11 items-center gap-1 rounded-full border border-gray-200 bg-white/95 p-1 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur sm:right-[4.25rem] sm:top-4">
-                <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    type="button"
-                    aria-label="Show fewer days"
-                    disabled={visibleDayCount <= 1}
-                    onClick={() => setVisibleDayCount((current) => current - 1)}
-                >
-                    -
-                </button>
-                <span className="w-6 text-center text-sm font-semibold tabular-nums" aria-label="Visible days">
-                    {visibleDayCount}
+                <span className="pl-2 text-xs font-semibold text-gray-500" aria-hidden="true">
+                    H
                 </span>
                 <button
                     className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
                     type="button"
-                    aria-label="Show more days"
-                    disabled={visibleDayCount >= 31}
-                    onClick={() => setVisibleDayCount((current) => current + 1)}
+                    aria-label="Compress day width"
+                    disabled={dayWidthZoom <= MIN_DAY_WIDTH_ZOOM}
+                    onClick={() => zoomDayWidth(-1)}
+                >
+                    -
+                </button>
+                <button
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    type="button"
+                    aria-label="Expand day width"
+                    disabled={dayWidthZoom >= MAX_DAY_WIDTH_ZOOM}
+                    onClick={() => zoomDayWidth(1)}
+                >
+                    +
+                </button>
+                <div className="mx-0.5 h-6 w-px bg-gray-200" aria-hidden="true" />
+                <span className="text-xs font-semibold text-gray-500" aria-hidden="true">
+                    V
+                </span>
+                <button
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    type="button"
+                    aria-label="Compress timeline height"
+                    disabled={zoom <= MIN_ZOOM}
+                    onClick={() => zoomTimeline(-1)}
+                >
+                    -
+                </button>
+                <button
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    type="button"
+                    aria-label="Expand timeline height"
+                    disabled={zoom >= MAX_ZOOM}
+                    onClick={() => zoomTimeline(1)}
                 >
                     +
                 </button>
@@ -556,7 +676,9 @@ export default function Home() {
                     onPointerDown={startSwipe}
                     onPointerMove={trackSwipe}
                     onPointerUp={finishSwipe}
-                    onPointerCancel={() => {
+                    onPointerCancel={(event) => {
+                        activeTouchPointsRef.current.delete(event.pointerId)
+                        if (activeTouchPointsRef.current.size < 2) pinchStartRef.current = null
                         swipeStartRef.current = null
                     }}
                 >
@@ -568,6 +690,7 @@ export default function Home() {
                         pxPerMin={pxPerMin}
                         viewStartMin={viewStartMin}
                         viewEndMin={viewEndMin}
+                        dayColumnMinWidth={dayColumnMinWidth}
                         nowMin={nowMin}
                         onAddQuick={onAddQuick}
                         onMoveEvent={(id, next) => {
@@ -637,21 +760,6 @@ export default function Home() {
                             <section className={SETTINGS_SECTION_CLASS}>
                                 <h3 className="text-sm font-semibold text-gray-900">Timeline</h3>
                                 <label className="block text-sm text-gray-700">
-                                    <div className="mb-2 flex items-center justify-between gap-3">
-                                        <span>Scale</span>
-                                        <span className="font-semibold tabular-nums text-gray-900">{zoom}%</span>
-                                    </div>
-                                    <input
-                                        className="w-full accent-blue-600"
-                                        type="range"
-                                        min={MIN_ZOOM}
-                                        max={MAX_ZOOM}
-                                        step={ZOOM_STEP}
-                                        value={zoom}
-                                        onChange={(event) => setZoom(Number(event.target.value))}
-                                    />
-                                </label>
-                                <label className="mt-4 block text-sm text-gray-700">
                                     <div className="mb-2">Start hour</div>
                                     <select
                                         className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
