@@ -15,6 +15,10 @@ function getColumnClass(isToday: boolean, dayTone: DayTone) {
     return ""
 }
 
+function shouldIgnoreEmptyAction(target: EventTarget | null) {
+    return target instanceof HTMLElement && Boolean(target.closest('[data-eventblock="1"], button, input, textarea, select, a'))
+}
+
 export function DayColumn({
     dateKey,
     visibleIndex,
@@ -54,6 +58,14 @@ export function DayColumn({
 }) {
     const startHour = Math.floor(viewStartMin / 60)
     const endHour = Math.floor(viewEndMin / 60)
+    const addEventAtClientY = (element: HTMLDivElement, clientY: number) => {
+        const rect = element.getBoundingClientRect()
+        const y = clientY - rect.top
+        const rawMin = viewStartMin + y / pxPerMin
+        const startMin = clamp(snap(rawMin, gridMin), 0, 1440 - defaultDurationMin)
+        const endMin = startMin + defaultDurationMin
+        onDoubleClickEmpty(dateKey, startMin, endMin)
+    }
 
     return (
         <div
@@ -62,12 +74,12 @@ export function DayColumn({
             data-visible-index={visibleIndex}
             style={{ height: heightPx }}
             onDoubleClick={(e) => {
-                const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
-                const y = e.clientY - rect.top
-                const rawMin = viewStartMin + y / pxPerMin
-                const startMin = clamp(snap(rawMin, gridMin), 0, 1440 - defaultDurationMin)
-                const endMin = startMin + defaultDurationMin
-                onDoubleClickEmpty(dateKey, startMin, endMin)
+                if (shouldIgnoreEmptyAction(e.target)) return
+                addEventAtClientY(e.currentTarget, e.clientY)
+            }}
+            onClick={(e) => {
+                if (e.detail !== 2 || shouldIgnoreEmptyAction(e.target)) return
+                addEventAtClientY(e.currentTarget, e.clientY)
             }}
         >
             {Array.from({ length: endHour - startHour + 1 }).map((_, i) => {
