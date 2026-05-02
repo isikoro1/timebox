@@ -366,7 +366,6 @@ export default function Home() {
         const target = event.target as HTMLElement | null
         if (target?.closest(SWIPE_EXCLUDED_TARGETS)) return
 
-        event.currentTarget.setPointerCapture(event.pointerId)
         swipeStartRef.current = {
             pointerId: event.pointerId,
             pointerType: event.pointerType,
