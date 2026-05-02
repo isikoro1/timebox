@@ -20,6 +20,7 @@ Date navigation was only available through fixed buttons, and touch gestures on 
 - Added two-finger pinch zoom on the timeline to scale both day width and timeline height together.
 - Highlighted Saturdays, Sundays, and Japanese holidays in the header and day columns.
 - Lowered the current-time line layer so it no longer overlaps the sticky date header text.
+- Restored empty-slot schedule creation by handling both native `dblclick` and the second click of a double-click gesture.
 
 ## Verification
 
@@ -29,4 +30,5 @@ Date navigation was only available through fixed buttons, and touch gestures on 
 - In-app browser: confirmed the timeline still renders cleanly after the navigation control changes.
 - In-app browser: confirmed mouse dragging timeline empty space moves the date range.
 - In-app browser: confirmed weekend and holiday columns are visually distinct and the current-time line stays below the sticky header.
+- Code path check: confirmed empty-slot double-click creation ignores event blocks and interactive controls.
 - Code path check: confirmed swipe navigation ignores interactive targets, cancels on vertical movement, supports mouse and touch pointers, and leaves event-block pointer handlers untouched.
