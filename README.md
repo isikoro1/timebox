@@ -1,91 +1,87 @@
 # Timebox
 
-A minimal timeboxing web application focused on structured time management.
+A minimal timeboxing web application for planning work in fixed time blocks.
 
-No registration required. Completely free to use.
+No account is required. Data is stored locally in your browser.
 
-🇯🇵 [日本語版はこちら](README_JA.md)
+[Japanese version](README_JA.md)
 
----
-
-## 🔗 Live Demo
+## Live Demo
 
 https://isikoro1.github.io/timebox/
 
----
+## Concept
 
-## 🧭 Concept
+Timebox is built around a simple rule: plan the day on a calendar-like timeline and keep work inside clear time boundaries.
 
-Inspired by the timeboxing method popularized by Elon Musk,  
-this tool is designed to enforce focused work sessions.
-
-Time is normalized in **15-minute blocks**.
+The current UI uses **15-minute blocks** as the editing unit.
 
 - 1 block = 15 minutes
-- Drag & resize snaps to 15-minute intervals
-- Tasks can be rescheduled to later slots if unfinished
-- Visual current-time indicator
+- Double-click an empty slot to add an event
+- Drag an event to move it across time and dates
+- Resize events with 15-minute snapping
+- View the current time line on today's column
 
-The goal is to maximize focus through strict time boundaries.
+## Features
 
----
-
-## ✨ Features
-
-- Weekly / 3-day view toggle
-- Double-click to create events
-- Drag to move (time & day)
-- Resize by dragging edges (15-min snapping)
+- Date-based scheduling
+- Up to 31 visible days with horizontal scrolling
+- Calendar popover for date navigation
+- Japanese era year and Japanese holiday labels
 - Current time indicator
-- Event detail editing
-- URL link support
-- Alarm (works while tab is open)
+- Event detail editing with label, memo, and URLs
+- Clickable URL link from event blocks
+- JSON export and import for backup or transfer
+- Alarm notifications while the tab is open
+- Touch swipe navigation and pinch zoom support
 
----
-
-## 🏗 Architecture
+## Architecture
 
 ### Serverless Design
 
 - No authentication
 - No database
-- Fully static export
-- Data stored in browser `localStorage`
-
-Deployed via GitHub Pages.
-
----
+- Static export for GitHub Pages
+- Event data is stored in browser `localStorage`
 
 ### Time Management Logic
 
-- Time stored internally in minutes
-- UI normalized to 15-minute snapping
-- Drag position → minute conversion → state normalization
+- Times are stored internally as minutes from midnight
+- UI editing snaps to 15-minute intervals
+- Drag and resize operations convert pointer position into normalized minutes
+- Legacy weekday-based data can be migrated to date-based events
 
----
+## Tech Stack
 
-## 🛠 Tech Stack
-
-- Next.js (App Router)
+- Next.js App Router
+- React
 - TypeScript
 - Tailwind CSS
-- Static Export (`output: "export"`)
+- Static export (`output: "export"`)
 - GitHub Pages
 
----
+## Development
 
-## 🚀 Future Improvements
+```bash
+npm install
+npm run dev
+```
 
-- JSON Export / Import
-- 5-minute mode
-- 25-minute (Pomodoro) mode
-- Adjustable zoom levels
-- Day-only view
-- Alarm precision improvements
-- OSS support (issues & contributions)
+Useful checks:
 
----
+```bash
+npm run lint
+npm run build
+```
 
-## 📄 License
+## Future Improvements
+
+- Add automated tests for date, time, and storage logic
+- Persist view settings such as start hour and zoom level
+- Improve event layout when three or more events overlap
+- Improve alarm status visibility and test controls
+- Research login-free cross-device sync options
+
+## License
 
 MIT
