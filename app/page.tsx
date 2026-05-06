@@ -20,6 +20,7 @@ import {
 import { formatDateHeader, getTodayDateKey, parseDateKey, toDateKey } from "../lib/date"
 import { formatJapaneseEraYear } from "../lib/japaneseCalendar"
 import { parseEventItems } from "../lib/storage"
+import { minToHHMM } from "../lib/time"
 
 const STORAGE_KEY = "timeboxing-tool:v1:week-items"
 const GRID_MIN = 15
@@ -170,6 +171,12 @@ export default function Home() {
         enabled: alarmEnabled,
         leadMin: alarmLeadMin,
     })
+    const alarmStatusText = alarmEnabled ? "Enabled" : "Disabled"
+    const notificationPermissionText =
+        alarm.notificationPermission === "unsupported" ? "unsupported" : alarm.notificationPermission
+    const nextAlarmText = alarm.nextToday
+        ? `${alarm.nextToday.label || "(untitled)"} at ${minToHHMM(alarm.nextToday.alarmMin)}`
+        : "No upcoming alarm today"
 
     useEffect(() => {
         const isTyping = () => {
@@ -793,6 +800,28 @@ export default function Home() {
 
                             <section className={SETTINGS_SECTION_CLASS}>
                                 <h3 className="text-sm font-semibold text-gray-900">Alarm</h3>
+                                <div className="grid gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-gray-600">Status</span>
+                                        <span
+                                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                                alarmEnabled
+                                                    ? "bg-emerald-100 text-emerald-700"
+                                                    : "bg-gray-200 text-gray-700"
+                                            }`}
+                                        >
+                                            {alarmStatusText}
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-gray-600">Notification</span>
+                                        <span className="font-medium text-gray-900">{notificationPermissionText}</span>
+                                    </div>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <span className="text-gray-600">Next</span>
+                                        <span className="text-right font-medium text-gray-900">{nextAlarmText}</span>
+                                    </div>
+                                </div>
                                 <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
                                     <label className="flex items-center gap-2">
                                         <input
@@ -820,13 +849,25 @@ export default function Home() {
                                     </label>
                                 </div>
 
-                                <button
-                                    className={`${BUTTON_CLASS} mt-3 w-full`}
-                                    type="button"
-                                    onClick={() => alarm.requestNotificationPermission()}
-                                >
-                                    Notification permission
-                                </button>
+                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                    <button
+                                        className={BUTTON_CLASS}
+                                        type="button"
+                                        onClick={() => alarm.requestNotificationPermission()}
+                                        disabled={alarm.notificationPermission === "unsupported"}
+                                    >
+                                        Request notification
+                                    </button>
+                                    <button
+                                        className={BUTTON_CLASS}
+                                        type="button"
+                                        onClick={() => {
+                                            void alarm.testBeep()
+                                        }}
+                                    >
+                                        Test sound
+                                    </button>
+                                </div>
                             </section>
                         </div>
                     </div>
