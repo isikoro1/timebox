@@ -25,11 +25,11 @@ type ScheduledAlarmEvent = AlarmEvent & {
 
 const CHECK_INTERVAL_MS = 15_000
 const DUE_GRACE_MS = 90_000
+type NotificationPermissionState = NotificationPermission | "unsupported"
 
 export function useAlarm({ items, enabled, leadMin }: Options) {
-    const [hasNotificationPermission, setHasNotificationPermission] = useState<boolean>(
-        typeof Notification !== "undefined" && Notification.permission === "granted"
-    )
+    const [notificationPermission, setNotificationPermission] =
+        useState<NotificationPermissionState>(getNotificationPermission)
     const [nowMs, setNowMs] = useState(() => Date.now())
 
     const firedRef = useRef<Set<string>>(new Set())
@@ -43,16 +43,16 @@ export function useAlarm({ items, enabled, leadMin }: Options) {
     const requestNotificationPermission = async () => {
         if (typeof Notification === "undefined") return false
         if (Notification.permission === "granted") {
-            setHasNotificationPermission(true)
+            setNotificationPermission("granted")
             return true
         }
         if (Notification.permission === "denied") {
-            setHasNotificationPermission(false)
+            setNotificationPermission("denied")
             return false
         }
         const res = await Notification.requestPermission()
         const ok = res === "granted"
-        setHasNotificationPermission(ok)
+        setNotificationPermission(res)
         return ok
     }
 
@@ -176,11 +176,17 @@ export function useAlarm({ items, enabled, leadMin }: Options) {
 
     return {
         nextToday,
-        hasNotificationPermission,
+        notificationPermission,
+        hasNotificationPermission: notificationPermission === "granted",
         requestNotificationPermission,
         primeAudio,
         testBeep: playBeep,
     }
+}
+
+function getNotificationPermission(): NotificationPermissionState {
+    if (typeof Notification === "undefined") return "unsupported"
+    return Notification.permission
 }
 
 function getAudioContext(audioCtxRef: MutableRefObject<AudioContext | null>) {
