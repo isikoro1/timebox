@@ -47,16 +47,17 @@ export function EventBlock({
         }
     })
 
-    // Split overlapping events into up to two lanes.
+    // Split overlapping events into as many lanes as the overlap group needs.
     const laneGap = 4
-    const lanesCount = layout.lanesCount
-    const lane = layout.lane
+    const lanesCount = Math.max(1, layout.lanesCount)
+    const lane = Math.min(Math.max(0, layout.lane), lanesCount - 1)
     const widthStyle =
         lanesCount === 1
             ? { left: 4, right: 4 }
-            : lane === 0
-                ? { left: 4, right: `calc(50% + ${laneGap / 2}px)` }
-                : { left: `calc(50% - ${laneGap / 2}px)`, right: 4 }
+            : {
+                  left: `calc(4px + ${lane} * ((100% - ${8 + laneGap * (lanesCount - 1)}px) / ${lanesCount} + ${laneGap}px))`,
+                  width: `calc((100% - ${8 + laneGap * (lanesCount - 1)}px) / ${lanesCount})`,
+              }
 
     const MIN_DURATION = gridMin
     const resizeHandleRight = firstUrl ? 36 : 16
