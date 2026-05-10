@@ -5,6 +5,7 @@ import { DayColumn } from "./week/DayColumn"
 import { formatDateHeader, getTodayDateKey, parseDateKey } from "../lib/date"
 import { getJapaneseHolidayName } from "../lib/japaneseCalendar"
 import { minToHHMM } from "../lib/time"
+import { computeOverlapLayout, type LayoutInfo } from "./week/layout"
 
 export type EventItem = {
     id: string
@@ -17,8 +18,6 @@ export type EventItem = {
 }
 
 const TIME_COLUMN_WIDTH = 56
-
-type LayoutInfo = { lane: 0 | 1; lanesCount: 1 | 2 }
 type DayTone = "weekday" | "saturday" | "rest"
 
 function getDayTone(dateKey: string, holidayName: string | null): DayTone {
@@ -33,52 +32,6 @@ function getHeaderClass(isToday: boolean, dayTone: DayTone) {
     if (dayTone === "rest") return "bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-100"
     if (dayTone === "saturday") return "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-100"
     return "text-gray-800"
-}
-
-function computeTwoLaneLayout(items: EventItem[]): Map<string, LayoutInfo> {
-    const sorted = [...items].sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin)
-    const result = new Map<string, LayoutInfo>()
-
-    let laneEnd0 = -1
-    let laneEnd1 = -1
-
-    for (const item of sorted) {
-        const overlapsLane0 = item.startMin < laneEnd0
-        const overlapsLane1 = item.startMin < laneEnd1
-
-        if (!overlapsLane0) {
-            result.set(item.id, { lane: 0, lanesCount: overlapsLane1 ? 2 : 1 })
-            laneEnd0 = item.endMin
-            continue
-        }
-
-        if (!overlapsLane1) {
-            result.set(item.id, { lane: 1, lanesCount: 2 })
-            laneEnd1 = item.endMin
-            continue
-        }
-
-        result.set(item.id, { lane: 1, lanesCount: 2 })
-        laneEnd1 = Math.max(laneEnd1, item.endMin)
-    }
-
-    for (let i = 0; i < sorted.length; i += 1) {
-        for (let j = i + 1; j < sorted.length; j += 1) {
-            const a = sorted[i]
-            const b = sorted[j]
-            const overlap = a.startMin < b.endMin && b.startMin < a.endMin
-            if (!overlap) continue
-
-            const layoutA = result.get(a.id)
-            const layoutB = result.get(b.id)
-            if (!layoutA || !layoutB || layoutA.lane === layoutB.lane) continue
-
-            result.set(a.id, { ...layoutA, lanesCount: 2 })
-            result.set(b.id, { ...layoutB, lanesCount: 2 })
-        }
-    }
-
-    return result
 }
 
 export function WeekGrid({
@@ -128,7 +81,7 @@ export function WeekGrid({
 
     const layoutByDate: Record<string, Map<string, LayoutInfo>> = {}
     for (const dateKey of visibleDateKeys) {
-        layoutByDate[dateKey] = computeTwoLaneLayout(itemsByDate[dateKey] ?? [])
+        layoutByDate[dateKey] = computeOverlapLayout(itemsByDate[dateKey] ?? [])
     }
 
     const startHour = Math.floor(viewStartMin / 60)

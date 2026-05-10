@@ -77,9 +77,6 @@ npm run build
 ## Future Improvements
 
 - Add automated tests for date, time, and storage logic
-- Persist view settings such as start hour and zoom level
-- Improve event layout when three or more events overlap
-- Improve alarm status visibility and test controls
 - Research login-free cross-device sync options
 
 ## License
