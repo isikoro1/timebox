@@ -8,6 +8,10 @@ Each log should capture:
 - the chosen fix
 - how the fix was verified
 
+## Logs
+
+- [Issue #33: Split Home Component Responsibilities](./issue-33-home-component-split.md)
+
 ## Japanese
 
 このディレクトリには、issue 修正時の短い実装ログを保存します。
