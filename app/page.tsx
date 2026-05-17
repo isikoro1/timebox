@@ -1,130 +1,31 @@
 "use client"
 
-import { ChangeEvent, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react"
-import { QuickAddModal, type QuickAddState } from "../components/QuickAddModal"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { CalendarPopover, getMonthLabel } from "../components/CalendarPopover"
 import { EventDetailsPopover } from "../components/EventDetailsPopover"
+import { FloatingControls } from "../components/FloatingControls"
+import { QuickAddModal, type QuickAddState } from "../components/QuickAddModal"
+import { TransferToast } from "../components/TransferToast"
 import { type EventItem, WeekGrid } from "../components/WeekGrid"
+import { SettingsDialog } from "../components/SettingsDialog"
 import { useAlarm } from "../hooks/useAlarm"
+import { useJsonTransfer } from "../hooks/useJsonTransfer"
 import { useNowMin } from "../hooks/useNowMin"
 import { useSelection } from "../hooks/useSelection"
+import { useSwipeNavigation } from "../hooks/useSwipeNavigation"
 import { useTimeboxingItems } from "../hooks/useTimeboxingItems"
-import {
-    DAY_WIDTH_ZOOM_STEP,
-    MAX_DAY_WIDTH_ZOOM,
-    MAX_ZOOM,
-    MIN_DAY_WIDTH_ZOOM,
-    MIN_ZOOM,
-    ZOOM_STEP,
-    useViewOptions,
-} from "../hooks/useViewOptions"
-import { formatDateHeader, getTodayDateKey, parseDateKey, toDateKey } from "../lib/date"
-import { formatJapaneseEraYear } from "../lib/japaneseCalendar"
-import { parseEventItems } from "../lib/storage"
-import { minToHHMM } from "../lib/time"
+import { DAY_WIDTH_ZOOM_STEP, ZOOM_STEP, useViewOptions } from "../hooks/useViewOptions"
+import { formatDateHeader, getTodayDateKey } from "../lib/date"
 
 const STORAGE_KEY = "timeboxing-tool:v1:week-items"
 const GRID_MIN = 15
 const DEFAULT_DURATION = 30
-const BUTTON_CLASS =
-    "rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-const SETTINGS_SECTION_CLASS = "space-y-3 border-t border-gray-100 pt-4 first:border-t-0 first:pt-0"
-const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
-const SWIPE_MIN_X = 64
-const SWIPE_MAX_TAP_MS = 700
-const SWIPE_VERTICAL_CANCEL_Y = 32
-const SWIPE_HORIZONTAL_RATIO = 1.4
-const SWIPE_EXCLUDED_TARGETS = 'button, input, textarea, select, a, [data-eventblock="1"]'
-const PINCH_MIN_DISTANCE = 40
-
-type SwipeStart = {
-    pointerId: number
-    pointerType: string
-    x: number
-    y: number
-    time: number
-    cancelled: boolean
-}
-
-type TouchPoint = {
-    x: number
-    y: number
-}
-
-type PinchStart = {
-    distance: number
-    zoom: number
-    dayWidthZoom: number
-}
-
-function buildExportFilename() {
-    const stamp = new Date().toISOString().slice(0, 10)
-    return `timebox-events-${stamp}.json`
-}
-
-function downloadJson(items: EventItem[]) {
-    const blob = new Blob([JSON.stringify(items, null, 2)], {
-        type: "application/json",
-    })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement("a")
-    anchor.href = url
-    anchor.download = buildExportFilename()
-    anchor.click()
-    URL.revokeObjectURL(url)
-}
-
-function getMonthLabel(dateKey: string) {
-    const date = parseDateKey(dateKey)
-    const monthName = date.toLocaleString("en-US", { month: "long" })
-    return `${monthName} ${date.getFullYear()} (${formatJapaneseEraYear(dateKey)})`
-}
-
-function addMonths(dateKey: string, delta: number) {
-    const date = parseDateKey(dateKey)
-    const day = date.getDate()
-    const next = new Date(date.getFullYear(), date.getMonth() + delta, 1)
-    const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
-    next.setDate(Math.min(day, lastDay))
-    return toDateKey(next)
-}
-
-function getMonthCalendarDays(monthDateKey: string) {
-    const monthDate = parseDateKey(monthDateKey)
-    const firstOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1)
-    const firstGridDate = new Date(firstOfMonth)
-    firstGridDate.setDate(firstGridDate.getDate() - ((firstGridDate.getDay() + 6) % 7))
-
-    return Array.from({ length: 42 }, (_, index) => {
-        const date = new Date(firstGridDate)
-        date.setDate(firstGridDate.getDate() + index)
-        return {
-            dateKey: toDateKey(date),
-            day: date.getDate(),
-            inMonth: date.getMonth() === monthDate.getMonth(),
-        }
-    })
-}
-
-function clamp(value: number, min: number, max: number) {
-    return Math.min(max, Math.max(min, value))
-}
-
-function snapToStep(value: number, step: number) {
-    return Math.round(value / step) * step
-}
-
-function getPinchDistance(points: TouchPoint[]) {
-    if (points.length < 2) return 0
-    return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)
-}
 
 export default function Home() {
     const { items, setItems, loaded } = useTimeboxingItems(STORAGE_KEY)
     const nowMin = useNowMin(15000)
     const [alarmEnabled, setAlarmEnabled] = useState(false)
     const [alarmLeadMin, setAlarmLeadMin] = useState(0)
-    const [transferMessage, setTransferMessage] = useState<string | null>(null)
-    const [transferState, setTransferState] = useState<"success" | "error" | null>(null)
     const [settingsOpen, setSettingsOpen] = useState(false)
     const [calendarOpen, setCalendarOpen] = useState(false)
     const [calendarMonthKey, setCalendarMonthKey] = useState(getTodayDateKey)
@@ -149,10 +50,6 @@ export default function Home() {
     const { selectedId, selectedAnchor, selectedItem, open, close } = useSelection(items)
     const [quickAdd, setQuickAdd] = useState<QuickAddState | null>(null)
     const clipboardRef = useRef<EventItem | null>(null)
-    const importInputRef = useRef<HTMLInputElement | null>(null)
-    const swipeStartRef = useRef<SwipeStart | null>(null)
-    const activeTouchPointsRef = useRef<Map<number, TouchPoint>>(new Map())
-    const pinchStartRef = useRef<PinchStart | null>(null)
 
     const alarmItems = useMemo(
         () =>
@@ -171,12 +68,26 @@ export default function Home() {
         enabled: alarmEnabled,
         leadMin: alarmLeadMin,
     })
-    const alarmStatusText = alarmEnabled ? "Enabled" : "Disabled"
-    const notificationPermissionText =
-        alarm.notificationPermission === "unsupported" ? "unsupported" : alarm.notificationPermission
-    const nextAlarmText = alarm.nextToday
-        ? `${alarm.nextToday.label || "(untitled)"} at ${minToHHMM(alarm.nextToday.alarmMin)}`
-        : "No upcoming alarm today"
+
+    const { importInputRef, transferMessage, transferState, exportJson, importJson, openImportPicker } =
+        useJsonTransfer({
+            items,
+            setItems,
+            onImportSuccess: close,
+        })
+
+    const moveDate = (direction: -1 | 1) => shiftCenter(direction)
+    const zoomTimeline = (direction: -1 | 1) => setZoom((current) => current + direction * ZOOM_STEP)
+    const zoomDayWidth = (direction: -1 | 1) =>
+        setDayWidthZoom((current) => current + direction * DAY_WIDTH_ZOOM_STEP)
+
+    const { startSwipe, trackSwipe, finishSwipe, cancelSwipe } = useSwipeNavigation({
+        zoom,
+        dayWidthZoom,
+        setZoom,
+        setDayWidthZoom,
+        onMoveDate: moveDate,
+    })
 
     useEffect(() => {
         const isTyping = () => {
@@ -283,388 +194,42 @@ export default function Home() {
         setQuickAdd(null)
     }
 
-    const handleExport = () => {
-        downloadJson(items)
-        setTransferMessage(`Exported ${items.length} event${items.length === 1 ? "" : "s"} to JSON.`)
-        setTransferState("success")
-    }
-
-    const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0]
-        if (!file) return
-
-        try {
-            const raw = await file.text()
-            const parsed = parseEventItems(raw)
-
-            if (!parsed) {
-                setTransferMessage("Import failed. The JSON file is invalid or missing required fields.")
-                setTransferState("error")
-                return
-            }
-
-            setItems(parsed)
-            close()
-            setTransferMessage(`Imported ${parsed.length} event${parsed.length === 1 ? "" : "s"} from ${file.name}.`)
-            setTransferState("success")
-        } catch {
-            setTransferMessage("Import failed. The file could not be read.")
-            setTransferState("error")
-        } finally {
-            event.target.value = ""
-        }
-    }
-
-    const dayLabel = formatDateHeader(centerDateKey)
-    const visibleMonthLabel = getMonthLabel(visibleDateKeys[0] ?? centerDateKey)
-    const todayKey = getTodayDateKey()
-    const calendarDays = getMonthCalendarDays(calendarMonthKey)
-    const moveDate = (direction: -1 | 1) => shiftCenter(direction)
-    const zoomTimeline = (direction: -1 | 1) => setZoom((current) => current + direction * ZOOM_STEP)
-    const zoomDayWidth = (direction: -1 | 1) =>
-        setDayWidthZoom((current) => current + direction * DAY_WIDTH_ZOOM_STEP)
     const jumpToDate = (dateKey: string) => {
         setCenterDateKey(dateKey)
         setCalendarMonthKey(dateKey)
         setCalendarOpen(false)
     }
-    const jumpToToday = () => jumpToDate(todayKey)
-    const beginPinch = () => {
-        const distance = getPinchDistance([...activeTouchPointsRef.current.values()])
-        if (distance < PINCH_MIN_DISTANCE) return
 
-        pinchStartRef.current = {
-            distance,
-            zoom,
-            dayWidthZoom,
-        }
-    }
-    const updatePinch = () => {
-        const pinchStart = pinchStartRef.current
-        if (!pinchStart) return
-
-        const distance = getPinchDistance([...activeTouchPointsRef.current.values()])
-        if (distance < PINCH_MIN_DISTANCE) return
-
-        const scale = distance / pinchStart.distance
-        const nextZoom = clamp(snapToStep(pinchStart.zoom * scale, ZOOM_STEP), MIN_ZOOM, MAX_ZOOM)
-        const nextDayWidthZoom = clamp(
-            snapToStep(pinchStart.dayWidthZoom * scale, DAY_WIDTH_ZOOM_STEP),
-            MIN_DAY_WIDTH_ZOOM,
-            MAX_DAY_WIDTH_ZOOM
-        )
-
-        setZoom(nextZoom)
-        setDayWidthZoom(nextDayWidthZoom)
-    }
-    const startSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.pointerType === "touch") {
-            activeTouchPointsRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-            if (activeTouchPointsRef.current.size >= 2) {
-                swipeStartRef.current = null
-                beginPinch()
-                return
-            }
-        }
-
-        if (event.pointerType === "mouse" && event.button !== 0) return
-        if (event.pointerType !== "touch" && event.pointerType !== "mouse") return
-
-        const target = event.target as HTMLElement | null
-        if (target?.closest(SWIPE_EXCLUDED_TARGETS)) return
-
-        swipeStartRef.current = {
-            pointerId: event.pointerId,
-            pointerType: event.pointerType,
-            x: event.clientX,
-            y: event.clientY,
-            time: performance.now(),
-            cancelled: false,
-        }
-    }
-    const trackSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.pointerType === "touch" && activeTouchPointsRef.current.has(event.pointerId)) {
-            activeTouchPointsRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-            if (pinchStartRef.current) {
-                updatePinch()
-                return
-            }
-        }
-
-        const start = swipeStartRef.current
-        if (!start || event.pointerId !== start.pointerId || event.pointerType !== start.pointerType) return
-        if (event.pointerType === "mouse" && event.buttons !== 1) return
-
-        const dx = event.clientX - start.x
-        const dy = event.clientY - start.y
-        const horizontalIntent = Math.abs(dx) >= Math.abs(dy) * SWIPE_HORIZONTAL_RATIO
-        const verticalIntent = Math.abs(dy) > SWIPE_VERTICAL_CANCEL_Y && !horizontalIntent
-        if (verticalIntent) start.cancelled = true
-    }
-    const finishSwipe = (event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.pointerType === "touch") {
-            activeTouchPointsRef.current.delete(event.pointerId)
-            if (pinchStartRef.current) {
-                if (activeTouchPointsRef.current.size < 2) pinchStartRef.current = null
-                swipeStartRef.current = null
-                return
-            }
-        }
-
-        const start = swipeStartRef.current
-        swipeStartRef.current = null
-        if (!start || start.cancelled || event.pointerId !== start.pointerId || event.pointerType !== start.pointerType) return
-
-        const dx = event.clientX - start.x
-        const dy = event.clientY - start.y
-        const elapsed = performance.now() - start.time
-        if (elapsed > SWIPE_MAX_TAP_MS) return
-        if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) < Math.abs(dy) * SWIPE_HORIZONTAL_RATIO) return
-
-        moveDate(dx < 0 ? 1 : -1)
-    }
+    const todayKey = getTodayDateKey()
+    const visibleMonthLabel = getMonthLabel(visibleDateKeys[0] ?? centerDateKey)
 
     return (
         <main className="flex h-screen flex-col overflow-hidden bg-gray-50 text-gray-900">
-            <div className="fixed left-3 top-3 z-40 rounded-full border border-gray-200 bg-white/95 px-4 py-2 text-sm font-semibold text-gray-800 shadow-lg shadow-gray-900/10 backdrop-blur sm:left-4 sm:top-4">
-                {visibleMonthLabel}
-            </div>
+            <FloatingControls
+                visibleMonthLabel={visibleMonthLabel}
+                dayWidthZoom={dayWidthZoom}
+                zoom={zoom}
+                onMoveDate={moveDate}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onZoomDayWidth={zoomDayWidth}
+                onZoomTimeline={zoomTimeline}
+            />
 
-            <div className="fixed bottom-3 left-1/2 z-40 hidden -translate-x-1/2 items-center gap-2 rounded-full border border-gray-200 bg-white/95 p-1 shadow-lg shadow-gray-900/10 backdrop-blur sm:bottom-4 sm:flex">
-                <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
-                    type="button"
-                    aria-label="Previous dates"
-                    onClick={() => moveDate(-1)}
-                >
-                    <svg
-                        aria-hidden="true"
-                        className="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                    >
-                        <path d="m15 18-6-6 6-6" />
-                    </svg>
-                </button>
-                <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100"
-                    type="button"
-                    aria-label="Next dates"
-                    onClick={() => moveDate(1)}
-                >
-                    <svg
-                        aria-hidden="true"
-                        className="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                    >
-                        <path d="m9 18 6-6-6-6" />
-                    </svg>
-                </button>
-            </div>
+            <CalendarPopover
+                open={calendarOpen}
+                monthDateKey={calendarMonthKey}
+                centerDateKey={centerDateKey}
+                todayDateKey={todayKey}
+                onOpenChange={(openNext) => {
+                    setCalendarMonthKey(centerDateKey)
+                    setCalendarOpen(openNext)
+                }}
+                onMonthChange={setCalendarMonthKey}
+                onToday={() => jumpToDate(todayKey)}
+                onSelectDate={jumpToDate}
+            />
 
-            <button
-                className="fixed right-3 top-3 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur transition hover:bg-white sm:right-4 sm:top-4"
-                type="button"
-                aria-label="Open settings"
-                onClick={() => setSettingsOpen(true)}
-            >
-                <svg
-                    aria-hidden="true"
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                >
-                    <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
-                    <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1A2 2 0 1 1 7.1 4.3l.1.1A1.7 1.7 0 0 0 9 4.7a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8 1.7 1.7 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1Z" />
-                </svg>
-            </button>
-            <div className="fixed right-16 top-3 z-40 flex h-11 items-center gap-1 rounded-full border border-gray-200 bg-white/95 p-1 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur sm:right-[4.25rem] sm:top-4">
-                <span className="pl-2 text-xs font-semibold text-gray-500" aria-hidden="true">
-                    H
-                </span>
-                <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    type="button"
-                    aria-label="Compress day width"
-                    disabled={dayWidthZoom <= MIN_DAY_WIDTH_ZOOM}
-                    onClick={() => zoomDayWidth(-1)}
-                >
-                    -
-                </button>
-                <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    type="button"
-                    aria-label="Expand day width"
-                    disabled={dayWidthZoom >= MAX_DAY_WIDTH_ZOOM}
-                    onClick={() => zoomDayWidth(1)}
-                >
-                    +
-                </button>
-                <div className="mx-0.5 h-6 w-px bg-gray-200" aria-hidden="true" />
-                <span className="text-xs font-semibold text-gray-500" aria-hidden="true">
-                    V
-                </span>
-                <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    type="button"
-                    aria-label="Compress timeline height"
-                    disabled={zoom <= MIN_ZOOM}
-                    onClick={() => zoomTimeline(-1)}
-                >
-                    -
-                </button>
-                <button
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-base font-semibold transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
-                    type="button"
-                    aria-label="Expand timeline height"
-                    disabled={zoom >= MAX_ZOOM}
-                    onClick={() => zoomTimeline(1)}
-                >
-                    +
-                </button>
-            </div>
-            <div className="fixed right-3 top-16 z-50 sm:right-4 sm:top-[4.25rem]" data-calendar-root="1">
-                <button
-                    className="flex h-11 w-11 items-center justify-center rounded-full border border-gray-200 bg-white/95 text-gray-700 shadow-lg shadow-gray-900/10 backdrop-blur transition hover:bg-white"
-                    type="button"
-                    aria-label="Open calendar"
-                    onClick={() => {
-                        setCalendarMonthKey(centerDateKey)
-                        setCalendarOpen((open) => !open)
-                    }}
-                >
-                    <svg
-                        aria-hidden="true"
-                        className="h-5 w-5"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                    >
-                        <path d="M8 2v4" />
-                        <path d="M16 2v4" />
-                        <path d="M3 10h18" />
-                        <rect x="3" y="4" width="18" height="18" rx="2" />
-                    </svg>
-                </button>
-
-                {calendarOpen ? (
-                    <div
-                        className="mt-2 w-80 rounded-xl border border-gray-200 bg-white p-3 shadow-2xl shadow-gray-900/15"
-                        onMouseDown={(event) => event.stopPropagation()}
-                    >
-                        <div className="mb-3 flex items-center gap-2">
-                            <button
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition hover:bg-gray-50"
-                                type="button"
-                                aria-label="Previous month"
-                                onClick={() => setCalendarMonthKey((current) => addMonths(current, -1))}
-                            >
-                                <svg
-                                    aria-hidden="true"
-                                    className="h-4 w-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path d="m15 18-6-6 6-6" />
-                                </svg>
-                            </button>
-                            <div className="flex-1 text-center text-sm font-semibold text-gray-900">
-                                {getMonthLabel(calendarMonthKey)}
-                            </div>
-                            <button
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition hover:bg-gray-50"
-                                type="button"
-                                aria-label="Next month"
-                                onClick={() => setCalendarMonthKey((current) => addMonths(current, 1))}
-                            >
-                                <svg
-                                    aria-hidden="true"
-                                    className="h-4 w-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path d="m9 18 6-6-6-6" />
-                                </svg>
-                            </button>
-                        </div>
-                        <button
-                            className="mb-3 h-9 w-full rounded-lg border border-gray-200 bg-white text-sm font-semibold text-gray-800 transition hover:bg-gray-50"
-                            type="button"
-                            onClick={jumpToToday}
-                        >
-                            Today
-                        </button>
-
-                        <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase text-gray-500">
-                            {WEEKDAY_LABELS.map((label) => (
-                                <div key={label} className="py-1">
-                                    {label}
-                                </div>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-7 gap-1">
-                            {calendarDays.map((day) => {
-                                const isSelected = day.dateKey === centerDateKey
-                                const isToday = day.dateKey === todayKey
-                                return (
-                                    <button
-                                        key={day.dateKey}
-                                        className={`h-9 rounded-lg text-sm font-medium transition ${
-                                            isSelected
-                                                ? "bg-blue-600 text-white hover:bg-blue-700"
-                                                : isToday
-                                                  ? "border border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
-                                                  : day.inMonth
-                                                    ? "text-gray-800 hover:bg-gray-100"
-                                                    : "text-gray-400 hover:bg-gray-50"
-                                        }`}
-                                        type="button"
-                                        onClick={() => jumpToDate(day.dateKey)}
-                                    >
-                                        {day.day}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-                ) : null}
-            </div>
-
-            {transferMessage ? (
-                <div
-                    className={`fixed left-3 right-16 top-3 z-30 rounded-lg px-3 py-2 text-sm shadow-lg sm:left-auto sm:right-20 sm:top-4 sm:w-96 ${
-                        transferState === "error"
-                            ? "border border-rose-200 bg-rose-50 text-rose-700"
-                            : "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                    }`}
-                >
-                    {transferMessage}
-                </div>
-            ) : null}
+            <TransferToast message={transferMessage} state={transferState} />
 
             <input
                 ref={importInputRef}
@@ -672,7 +237,7 @@ export default function Home() {
                 accept="application/json,.json"
                 className="hidden"
                 onChange={(event) => {
-                    void handleImport(event)
+                    void importJson(event)
                 }}
             />
 
@@ -682,11 +247,7 @@ export default function Home() {
                     onPointerDown={startSwipe}
                     onPointerMove={trackSwipe}
                     onPointerUp={finishSwipe}
-                    onPointerCancel={(event) => {
-                        activeTouchPointsRef.current.delete(event.pointerId)
-                        if (activeTouchPointsRef.current.size < 2) pinchStartRef.current = null
-                        swipeStartRef.current = null
-                    }}
+                    onPointerCancel={cancelSwipe}
                 >
                     <WeekGrid
                         items={items}
@@ -730,149 +291,21 @@ export default function Home() {
                 />
             ) : null}
 
-            {settingsOpen ? (
-                <div
-                    className="fixed inset-0 z-50 flex items-start justify-center bg-gray-950/35 px-3 py-4 sm:items-center"
-                    role="dialog"
-                    aria-modal="true"
-                    aria-labelledby="settings-title"
-                    onMouseDown={() => setSettingsOpen(false)}
-                >
-                    <div
-                        className="flex max-h-[calc(100vh-2rem)] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
-                        onMouseDown={(event) => event.stopPropagation()}
-                    >
-                        <div className="flex items-center gap-3 border-b border-gray-200 px-4 py-3">
-                            <h2 id="settings-title" className="text-base font-semibold text-gray-900">
-                                Settings
-                            </h2>
-                            <button
-                                className="ml-auto rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
-                                type="button"
-                                onClick={() => setSettingsOpen(false)}
-                            >
-                                Close
-                            </button>
-                        </div>
-
-                        <div className="space-y-5 overflow-y-auto px-4 py-4">
-                            <section className={SETTINGS_SECTION_CLASS}>
-                                <h3 className="text-sm font-semibold text-gray-900">View</h3>
-                                <div className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600">
-                                    Focus: {dayLabel}
-                                </div>
-                            </section>
-
-                            <section className={SETTINGS_SECTION_CLASS}>
-                                <h3 className="text-sm font-semibold text-gray-900">Timeline</h3>
-                                <label className="block text-sm text-gray-700">
-                                    <div className="mb-2">Start hour</div>
-                                    <select
-                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
-                                        value={startHour}
-                                        onChange={(event) => setStartHour(Number(event.target.value))}
-                                    >
-                                        {Array.from({ length: 13 }, (_, hour) => (
-                                            <option key={hour} value={hour}>
-                                                {hour}:00
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                            </section>
-
-                            <section className={SETTINGS_SECTION_CLASS}>
-                                <h3 className="text-sm font-semibold text-gray-900">Backup</h3>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button className={BUTTON_CLASS} type="button" onClick={handleExport} disabled={!loaded}>
-                                        Export JSON
-                                    </button>
-                                    <button
-                                        className={BUTTON_CLASS}
-                                        type="button"
-                                        onClick={() => importInputRef.current?.click()}
-                                        disabled={!loaded}
-                                    >
-                                        Import JSON
-                                    </button>
-                                </div>
-                            </section>
-
-                            <section className={SETTINGS_SECTION_CLASS}>
-                                <h3 className="text-sm font-semibold text-gray-900">Alarm</h3>
-                                <div className="grid gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <span className="text-gray-600">Status</span>
-                                        <span
-                                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                                                alarmEnabled
-                                                    ? "bg-emerald-100 text-emerald-700"
-                                                    : "bg-gray-200 text-gray-700"
-                                            }`}
-                                        >
-                                            {alarmStatusText}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-3">
-                                        <span className="text-gray-600">Notification</span>
-                                        <span className="font-medium text-gray-900">{notificationPermissionText}</span>
-                                    </div>
-                                    <div className="flex items-start justify-between gap-3">
-                                        <span className="text-gray-600">Next</span>
-                                        <span className="text-right font-medium text-gray-900">{nextAlarmText}</span>
-                                    </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-700">
-                                    <label className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={alarmEnabled}
-                                            onChange={(event) => {
-                                                const checked = event.target.checked
-                                                setAlarmEnabled(checked)
-                                                if (checked) void alarm.primeAudio()
-                                            }}
-                                        />
-                                        Alarm
-                                    </label>
-
-                                    <label className="ml-auto flex items-center gap-2">
-                                        Lead min
-                                        <input
-                                            type="number"
-                                            min={0}
-                                            max={120}
-                                            value={alarmLeadMin}
-                                            onChange={(event) => setAlarmLeadMin(Number(event.target.value || 0))}
-                                            className="w-16 rounded border border-gray-200 bg-white px-2 py-1"
-                                        />
-                                    </label>
-                                </div>
-
-                                <div className="mt-3 grid grid-cols-2 gap-2">
-                                    <button
-                                        className={BUTTON_CLASS}
-                                        type="button"
-                                        onClick={() => alarm.requestNotificationPermission()}
-                                        disabled={alarm.notificationPermission === "unsupported"}
-                                    >
-                                        Request notification
-                                    </button>
-                                    <button
-                                        className={BUTTON_CLASS}
-                                        type="button"
-                                        onClick={() => {
-                                            void alarm.testBeep()
-                                        }}
-                                    >
-                                        Test sound
-                                    </button>
-                                </div>
-                            </section>
-                        </div>
-                    </div>
-                </div>
-            ) : null}
+            <SettingsDialog
+                open={settingsOpen}
+                loaded={loaded}
+                focusLabel={formatDateHeader(centerDateKey)}
+                startHour={startHour}
+                alarmEnabled={alarmEnabled}
+                alarmLeadMin={alarmLeadMin}
+                alarm={alarm}
+                onClose={() => setSettingsOpen(false)}
+                onStartHourChange={setStartHour}
+                onExport={exportJson}
+                onImport={openImportPicker}
+                onAlarmEnabledChange={setAlarmEnabled}
+                onAlarmLeadMinChange={setAlarmLeadMin}
+            />
         </main>
     )
 }

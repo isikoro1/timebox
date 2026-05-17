@@ -27,6 +27,8 @@ const CHECK_INTERVAL_MS = 15_000
 const DUE_GRACE_MS = 90_000
 type NotificationPermissionState = NotificationPermission | "unsupported"
 
+export type UseAlarmResult = ReturnType<typeof useAlarm>
+
 export function useAlarm({ items, enabled, leadMin }: Options) {
     const [notificationPermission, setNotificationPermission] =
         useState<NotificationPermissionState>(getNotificationPermission)
