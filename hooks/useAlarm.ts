@@ -1,26 +1,14 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react"
-import { toDateKey } from "../lib/date"
+import { getTodaySchedule, type AlarmEvent } from "../lib/alarmSchedule"
 
-export type AlarmEvent = {
-    id: string
-    dateKey: string
-    startMin: number
-    endMin: number
-    label: string
-}
+export type { AlarmEvent }
 
 type Options = {
     items: AlarmEvent[]
     enabled: boolean
     leadMin: number // 0 means fire at the event start time.
-}
-
-type ScheduledAlarmEvent = AlarmEvent & {
-    alarmMin: number
-    targetMs: number
-    fireKey: string
 }
 
 const CHECK_INTERVAL_MS = 15_000
@@ -203,27 +191,6 @@ function getAudioContext(audioCtxRef: MutableRefObject<AudioContext | null>) {
     if (!AudioCtx) return null
     audioCtxRef.current = new AudioCtx()
     return audioCtxRef.current
-}
-
-function getTodaySchedule(items: AlarmEvent[], leadMin: number, nowMs: number): ScheduledAlarmEvent[] {
-    const now = new Date(nowMs)
-    const todayKey = toDateKey(now)
-    const startOfToday = new Date(now)
-    startOfToday.setHours(0, 0, 0, 0)
-
-    return items
-        .filter((x) => x.dateKey === todayKey)
-        .map((x) => {
-            const alarmMin = Math.max(0, x.startMin - leadMin)
-            return {
-                ...x,
-                alarmMin,
-                targetMs: startOfToday.getTime() + alarmMin * 60_000,
-                fireKey: `${todayKey}:${x.id}:${alarmMin}:${x.startMin}:${x.endMin}`,
-            }
-        })
-        .filter((x) => x.alarmMin >= 0 && x.alarmMin <= 1440)
-        .sort((a, b) => a.targetMs - b.targetMs)
 }
 
 function pad(min: number) {

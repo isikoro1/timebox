@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "test": "tsc -p tsconfig.test.json && node --test \".test-out/tests/**/*.test.js\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

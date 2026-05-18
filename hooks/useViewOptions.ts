@@ -1,26 +1,24 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { addDays, getTodayDateKey, isDateKey } from "../lib/date"
+import { addDays, getTodayDateKey } from "../lib/date"
+import {
+    clamp,
+    DAY_WIDTH_ZOOM_STEP,
+    MAX_DAY_WIDTH_ZOOM,
+    MAX_START_HOUR,
+    MAX_ZOOM,
+    MIN_DAY_WIDTH_ZOOM,
+    MIN_START_HOUR,
+    MIN_ZOOM,
+    parseStoredViewOptions,
+    ZOOM_STEP,
+} from "../lib/viewOptions"
 
 const VISIBLE_DAY_COUNT = 31
 const VIEW_OPTIONS_STORAGE_KEY = "timeboxing-tool:v1:view-options"
-const MIN_START_HOUR = 0
-const MAX_START_HOUR = 12
-export const MIN_ZOOM = 75
-export const MAX_ZOOM = 200
-export const ZOOM_STEP = 5
-export const MIN_DAY_WIDTH_ZOOM = 70
-export const MAX_DAY_WIDTH_ZOOM = 180
-export const DAY_WIDTH_ZOOM_STEP = 10
+export { DAY_WIDTH_ZOOM_STEP, MAX_DAY_WIDTH_ZOOM, MAX_ZOOM, MIN_DAY_WIDTH_ZOOM, MIN_ZOOM, ZOOM_STEP }
 const BASE_DAY_COLUMN_WIDTH = 112
-
-type StoredViewOptions = {
-    startHour?: unknown
-    zoom?: unknown
-    dayWidthZoom?: unknown
-    centerDateKey?: unknown
-}
 
 export function useViewOptions() {
     const [startHour, setStartHour] = useState(6)
@@ -100,35 +98,4 @@ export function useViewOptions() {
         viewEndMin,
         visibleDateKeys,
     }
-}
-
-function parseStoredViewOptions(raw: string | null) {
-    if (!raw) return null
-
-    try {
-        const parsed = JSON.parse(raw) as StoredViewOptions
-        if (!parsed || typeof parsed !== "object") return null
-
-        return {
-            startHour:
-                typeof parsed.startHour === "number" && Number.isFinite(parsed.startHour)
-                    ? clamp(parsed.startHour, MIN_START_HOUR, MAX_START_HOUR)
-                    : undefined,
-            zoom:
-                typeof parsed.zoom === "number" && Number.isFinite(parsed.zoom)
-                    ? clamp(parsed.zoom, MIN_ZOOM, MAX_ZOOM)
-                    : undefined,
-            dayWidthZoom:
-                typeof parsed.dayWidthZoom === "number" && Number.isFinite(parsed.dayWidthZoom)
-                    ? clamp(parsed.dayWidthZoom, MIN_DAY_WIDTH_ZOOM, MAX_DAY_WIDTH_ZOOM)
-                    : undefined,
-            centerDateKey: isDateKey(parsed.centerDateKey) ? parsed.centerDateKey : undefined,
-        }
-    } catch {
-        return null
-    }
-}
-
-function clamp(value: number, min: number, max: number) {
-    return Math.min(max, Math.max(min, value))
 }

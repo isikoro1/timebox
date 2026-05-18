@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": ".test-out",
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": [
+    "components/week/layout.ts",
+    "hooks/useAlarm.ts",
+    "hooks/useViewOptions.ts",
+    "lib/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": ["node_modules", ".next", ".test-out"]
+}
