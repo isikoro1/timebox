@@ -1,8 +1,8 @@
-# Learning Docs
+# 学習用ドキュメント
 
 このディレクトリには、Timebox の実装を理解するための学習用ドキュメントを保存します。
 
-## Documents
+## ドキュメント
 
 - [Timebox 技術理解ガイド](./timebox-technical-guide-ja.txt)
 - [Timebox 技術理解 問題集](./timebox-practice-questions-ja.txt)
