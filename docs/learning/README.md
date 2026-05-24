@@ -1,0 +1,14 @@
+# Learning Docs
+
+このディレクトリには、Timebox の実装を理解するための学習用ドキュメントを保存します。
+
+## Documents
+
+- [Timebox 技術理解ガイド](./timebox-technical-guide-ja.txt)
+- [Timebox 技術理解 問題集](./timebox-practice-questions-ja.txt)
+
+## 管理方針
+
+- アプリの実装理解やオンボーディングに役立つ資料は、このディレクトリで管理します。
+- ローカル開発時の一時ログや実行結果は含めません。
+- 内容を更新した場合は、関連する実装変更や issue と対応が分かるようにします。

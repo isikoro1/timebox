@@ -1,0 +1,465 @@
+Timebox 技術理解ガイド
+=======================
+
+このテキストは「Timebox の技術が何も分からない」状態から、リポジトリの中身を読めるようになるための説明です。
+プログラミング経験が浅くても追えるように、まず全体像を説明してから、ファイルごとの役割に進みます。
+
+
+1. Timebox は何をするアプリか
+----------------------------
+
+Timebox は、予定を時間の箱としてカレンダー上に並べる Web アプリです。
+
+主な操作は次の通りです。
+
+- 日付ごとの縦長タイムラインを見る
+- 空いている時間をダブルクリックして予定を追加する
+- 予定ブロックをドラッグして時刻や日付を変える
+- 予定ブロックの上下をドラッグして時間の長さを変える
+- 予定の詳細、メモ、URL を編集する
+- JSON で予定をインポート、エクスポートする
+- ブラウザ内の localStorage に予定を保存する
+- 今日の現在時刻ラインやアラームを表示、通知する
+
+このアプリはサーバーにログインしてデータを保存するタイプではありません。
+予定データはブラウザの localStorage に保存されます。
+
+
+2. 使っている主な技術
+--------------------
+
+package.json から見ると、このアプリは以下の技術で作られています。
+
+- Next.js
+  React を使った Web アプリのフレームワークです。
+  このリポジトリでは App Router 形式で、app/page.tsx が画面の中心です。
+
+- React
+  UI をコンポーネントという部品に分けて作るライブラリです。
+  WeekGrid、DayColumn、EventBlock などが React コンポーネントです。
+
+- TypeScript
+  JavaScript に型を付けた言語です。
+  EventItem のように、データの形を明示できます。
+
+- Tailwind CSS
+  className に短いクラス名を書いて見た目を作る CSS ツールです。
+  例: bg-white、text-gray-900、rounded-xl、border など。
+
+- localStorage
+  ブラウザに小さなデータを保存する仕組みです。
+  サーバーやデータベースなしで予定を保存するために使っています。
+
+- Browser APIs
+  Notification、AudioContext、Blob、URL.createObjectURL など、ブラウザに元からある機能を使っています。
+  通知、音、JSON ダウンロードなどに関係します。
+
+
+3. まず見るべきファイル
+----------------------
+
+最初は全部を読もうとしないでください。
+次の順番で読むと理解しやすいです。
+
+1. package.json
+   アプリの技術スタックと起動コマンドが分かります。
+
+2. app/page.tsx
+   アプリ全体の状態管理と画面の組み立てをしています。
+
+3. components/WeekGrid.tsx
+   日付列と時間軸を並べるメインのカレンダー表示です。
+
+4. components/week/DayColumn.tsx
+   1日分の列です。
+   空欄ダブルクリックで予定追加、時間目盛り、予定ブロック表示を担当します。
+
+5. components/week/EventBlock.tsx
+   1つの予定ブロックです。
+   ドラッグ移動、リサイズ、URL リンク表示を担当します。
+
+6. hooks/useTimeboxingItems.ts
+   予定データを React の state と localStorage に保存します。
+
+7. lib/storage.ts
+   JSON から読み込んだ予定データが正しい形かチェックします。
+
+8. lib/time.ts と lib/date.ts
+   時刻や日付の小さな便利関数です。
+
+
+4. データの中心: EventItem
+-------------------------
+
+予定データの基本形は components/WeekGrid.tsx にある EventItem です。
+
+EventItem の形:
+
+type EventItem = {
+    id: string
+    dateKey: string
+    startMin: number
+    endMin: number
+    label: string
+    urls?: string[]
+    description?: string
+}
+
+それぞれの意味:
+
+- id
+  予定を区別するための一意な文字列です。
+
+- dateKey
+  予定の日付です。
+  "2026-05-05" のような YYYY-MM-DD 形式です。
+
+- startMin
+  予定の開始時刻です。
+  0時から何分後かで表します。
+  例: 9:30 は 9 * 60 + 30 = 570 です。
+
+- endMin
+  予定の終了時刻です。
+  例: 10:00 は 600 です。
+
+- label
+  予定のタイトルです。
+
+- urls
+  予定に紐づく URL の配列です。
+
+- description
+  メモです。
+
+重要なのは、このアプリでは時刻を "09:30" の文字列ではなく、分数の number で扱っていることです。
+このおかげで、ドラッグ量から時刻を計算しやすくなります。
+
+
+5. app/page.tsx の役割
+---------------------
+
+app/page.tsx は Home コンポーネントを定義しています。
+このファイルはアプリの司令塔です。
+
+主な仕事:
+
+- useTimeboxingItems で予定データを読み書きする
+- useViewOptions で表示する日付範囲、拡大率、開始時刻を管理する
+- useNowMin で現在時刻を取得する
+- useAlarm でアラームを管理する
+- QuickAddModal、EventDetailsPopover、WeekGrid を表示する
+- JSON インポート、エクスポートを処理する
+- 設定モーダルやカレンダーポップアップを開閉する
+- スワイプやピンチ操作を処理する
+
+React では、画面に必要な値を state として持ちます。
+このアプリの代表的な state は次のようなものです。
+
+- items
+  予定一覧です。
+
+- settingsOpen
+  設定画面を開いているかどうかです。
+
+- calendarOpen
+  カレンダー選択を開いているかどうかです。
+
+- quickAdd
+  新規予定追加モーダルで編集中の値です。
+
+- selectedId
+  選択中の予定 ID です。
+
+
+6. 表示の流れ
+------------
+
+Timebox の画面表示は、おおまかに次の順番で流れます。
+
+1. app/page.tsx が予定データ items を持つ
+2. app/page.tsx が WeekGrid に items と表示条件を渡す
+3. WeekGrid が visibleDateKeys をもとに日付列を作る
+4. WeekGrid が予定を日付ごとに分ける
+5. WeekGrid が各日付に DayColumn を表示する
+6. DayColumn がその日の予定を EventBlock として表示する
+7. EventBlock が予定ブロックの位置と高さを計算する
+
+つまり、画面は次のような親子関係です。
+
+Home
+  -> WeekGrid
+      -> DayColumn
+          -> EventBlock
+
+
+7. 予定ブロックの位置計算
+------------------------
+
+EventBlock.tsx では、予定ブロックの縦位置と高さを計算しています。
+
+重要な値:
+
+- viewStartMin
+  表示開始時刻です。
+  例: 6:00 なら 360 です。
+
+- viewEndMin
+  表示終了時刻です。
+  このアプリでは 24:00、つまり 1440 です。
+
+- pxPerMin
+  1分を画面上で何ピクセルにするかです。
+  拡大率によって変わります。
+
+- item.startMin
+  予定の開始時刻です。
+
+- item.endMin
+  予定の終了時刻です。
+
+縦位置の考え方:
+
+top = (予定の開始分 - 表示開始分) * 1分あたりのピクセル
+
+例:
+
+- 表示開始が 6:00 なので viewStartMin = 360
+- 予定開始が 9:00 なので startMin = 540
+- pxPerMin = 1
+
+top = (540 - 360) * 1 = 180px
+
+高さの考え方:
+
+height = (予定の終了分 - 予定の開始分) * 1分あたりのピクセル
+
+例:
+
+- 予定が 9:00 から 10:00
+- 60分
+- pxPerMin = 1
+
+height = 60px
+
+
+8. 15分単位にそろえる仕組み
+--------------------------
+
+lib/time.ts に snap という関数があります。
+
+snap(min, grid) は、分数を grid に近い単位へ丸めます。
+
+例:
+
+- snap(62, 15) は 60
+- snap(68, 15) は 75
+- snap(30, 15) は 30
+
+このアプリでは gridMin が 15 なので、予定は 15分単位で追加、移動、リサイズされます。
+
+
+9. localStorage 保存の流れ
+-------------------------
+
+hooks/useTimeboxingItems.ts が保存を担当します。
+
+流れ:
+
+1. 初回表示時に localStorage.getItem(storageKey) で保存済みデータを読む
+2. parseEventItems でデータが正しいか確認する
+3. 正しければ items state に入れる
+4. items が変わったら localStorage.setItem で保存する
+
+注意点:
+
+- localStorage はブラウザ上にしかありません
+- そのため useTimeboxingItems.ts には "use client" が必要です
+- サーバー側では localStorage は使えません
+
+
+10. "use client" の意味
+----------------------
+
+Next.js では、ファイルの先頭に "use client" と書くと、そのコンポーネントはブラウザ側で動きます。
+
+このアプリでは以下のような処理が多いため、主要な UI ファイルに "use client" があります。
+
+- useState
+- useEffect
+- localStorage
+- window
+- document
+- PointerEvent
+- Notification
+- AudioContext
+
+これらはブラウザに依存するため、サーバー側ではそのまま使えません。
+
+
+11. JSON インポート、エクスポート
+-------------------------------
+
+エクスポートは app/page.tsx の downloadJson 関数で行います。
+
+流れ:
+
+1. items を JSON.stringify で文字列にする
+2. Blob を作る
+3. URL.createObjectURL で一時 URL を作る
+4. a 要素を作って click する
+5. JSON ファイルとしてダウンロードする
+
+インポートは handleImport で行います。
+
+流れ:
+
+1. ファイルを選ぶ
+2. file.text() で中身を読む
+3. parseEventItems で正しい予定配列か確認する
+4. 正しければ setItems(parsed) で予定一覧を置き換える
+
+lib/storage.ts は、壊れた JSON や不正な予定をそのまま使わないための安全装置です。
+
+
+12. アラームの仕組み
+------------------
+
+hooks/useAlarm.ts がアラームを担当します。
+
+使っているブラウザ機能:
+
+- Notification
+  デスクトップ通知を出すために使います。
+
+- AudioContext
+  ビープ音を鳴らすために使います。
+
+- setTimeout
+  次のアラーム時刻に合わせて処理を予約します。
+
+- setInterval
+  15秒ごとに現在時刻を確認します。
+
+アラームは予定の startMin と leadMin から鳴る時刻を計算します。
+
+例:
+
+- 予定開始: 10:00
+- leadMin: 5
+
+アラームは 9:55 に鳴ります。
+
+
+13. 日付の扱い
+-------------
+
+lib/date.ts では、日付を "YYYY-MM-DD" の dateKey として扱います。
+
+主な関数:
+
+- toDateKey(date)
+  Date を "YYYY-MM-DD" に変換します。
+
+- parseDateKey(dateKey)
+  "YYYY-MM-DD" を Date に戻します。
+
+- isDateKey(value)
+  文字列が正しい日付形式か確認します。
+
+- addDays(dateKey, delta)
+  dateKey に日数を足します。
+
+- getTodayDateKey()
+  今日の日付を dateKey で返します。
+
+dateKey を使う理由:
+
+- localStorage に保存しやすい
+- JSON にしやすい
+- 日付ごとの予定分類が簡単
+- Date オブジェクトのタイムゾーン問題を画面全体に広げにくい
+
+
+14. よくある読み方のコツ
+----------------------
+
+コードを読むときは、最初から細かい className を全部理解しようとしないでください。
+
+まず見るべきもの:
+
+- import
+  どの部品を使っているか
+
+- type
+  データの形
+
+- useState
+  何を状態として持っているか
+
+- useEffect
+  いつ副作用が起きるか
+
+- props
+  親から子へ何を渡しているか
+
+- callback
+  子から親へ何を知らせるか
+
+後回しでよいもの:
+
+- Tailwind の細かい見た目
+- SVG アイコンの path
+- shadow や border の細かい指定
+
+
+15. 変更するときの考え方
+----------------------
+
+Timebox に機能を追加するときは、次の順で考えると迷いにくいです。
+
+1. データの形を変える必要があるか
+   例: EventItem に color を追加するか。
+
+2. 保存形式を変える必要があるか
+   例: lib/storage.ts で color を読み込むか。
+
+3. 画面で入力する場所はどこか
+   例: EventDetailsPopover に色選択を足すか。
+
+4. 表示に反映する場所はどこか
+   例: EventBlock の背景色を変えるか。
+
+5. 既存データとの互換性はあるか
+   例: color がない古い予定でも壊れないか。
+
+
+16. 最小の理解チェック
+---------------------
+
+次のことを自分の言葉で説明できれば、Timebox の基本はつかめています。
+
+- EventItem の startMin と endMin が何を表すか
+- 予定ブロックの top と height がどう決まるか
+- items はどこで state として持たれているか
+- localStorage への保存はどの hook が担当しているか
+- WeekGrid、DayColumn、EventBlock の役割の違い
+- "use client" が必要な理由
+- JSON インポート時に lib/storage.ts が必要な理由
+
+
+17. 次に読むとよい順番
+--------------------
+
+1. docs/learning/timebox-practice-questions-ja.txt の問題を解く
+2. 問題で出てきたファイルを実際に開く
+3. 1つだけ小さな変更を試す
+4. npm run lint と npm run build で壊れていないか確認する
+
+最初の小さな変更例:
+
+- デフォルト予定時間を 30分から 45分に変える
+- 予定ブロックの最小高さを変える
+- 表示開始時刻の初期値を 6時から 7時に変える
+- JSON エクスポート時のファイル名を変える
+
