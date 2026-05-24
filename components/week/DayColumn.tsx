@@ -1,12 +1,21 @@
 "use client"
 
-import React from "react"
+import React, { useRef } from "react"
 import { clamp, snap } from "@/lib/time"
 import type { EventItem } from "@/components/WeekGrid"
 import type { LayoutInfo } from "./layout"
 import { EventBlock } from "./EventBlock"
 
 type DayTone = "weekday" | "saturday" | "rest"
+type TouchAddStart = {
+    pointerId: number
+    x: number
+    y: number
+    timeoutId: number
+}
+
+const TOUCH_ADD_DELAY_MS = 450
+const TOUCH_MOVE_CANCEL_PX = 12
 
 function getColumnClass(isToday: boolean, dayTone: DayTone) {
     if (isToday) return "bg-red-50/40 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.35)]"
@@ -56,6 +65,7 @@ export function DayColumn({
     onMoveEvent: (id: string, next: { dateKey: string; startMin: number; endMin: number }) => void
     onSelectEvent: (id: string, rect: DOMRect) => void
 }) {
+    const touchAddStartRef = useRef<TouchAddStart | null>(null)
     const startHour = Math.floor(viewStartMin / 60)
     const endHour = Math.floor(viewEndMin / 60)
     const addEventAtClientY = (element: HTMLDivElement, clientY: number) => {
@@ -65,6 +75,12 @@ export function DayColumn({
         const startMin = clamp(snap(rawMin, gridMin), 0, 1440 - defaultDurationMin)
         const endMin = startMin + defaultDurationMin
         onDoubleClickEmpty(dateKey, startMin, endMin)
+    }
+    const clearTouchAdd = () => {
+        const start = touchAddStartRef.current
+        if (!start) return
+        window.clearTimeout(start.timeoutId)
+        touchAddStartRef.current = null
     }
 
     return (
@@ -81,6 +97,31 @@ export function DayColumn({
                 if (e.detail !== 2 || shouldIgnoreEmptyAction(e.target)) return
                 addEventAtClientY(e.currentTarget, e.clientY)
             }}
+            onPointerDown={(e) => {
+                if (e.pointerType !== "touch" || shouldIgnoreEmptyAction(e.target)) return
+
+                const element = e.currentTarget
+                const clientY = e.clientY
+                clearTouchAdd()
+                touchAddStartRef.current = {
+                    pointerId: e.pointerId,
+                    x: e.clientX,
+                    y: e.clientY,
+                    timeoutId: window.setTimeout(() => {
+                        touchAddStartRef.current = null
+                        addEventAtClientY(element, clientY)
+                    }, TOUCH_ADD_DELAY_MS),
+                }
+            }}
+            onPointerMove={(e) => {
+                const start = touchAddStartRef.current
+                if (!start || e.pointerId !== start.pointerId) return
+
+                const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+                if (moved > TOUCH_MOVE_CANCEL_PX) clearTouchAdd()
+            }}
+            onPointerUp={clearTouchAdd}
+            onPointerCancel={clearTouchAdd}
         >
             {Array.from({ length: endHour - startHour + 1 }).map((_, i) => {
                 const h = startHour + i
