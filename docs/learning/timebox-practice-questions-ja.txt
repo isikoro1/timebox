@@ -1,0 +1,481 @@
+Timebox 技術理解 問題集
+=======================
+
+この問題集は、Timebox のコードを読みながら理解するためのものです。
+答えを暗記するより、該当ファイルを開いて「なぜそうなるか」を確認してください。
+
+
+第1章: リポジトリと技術スタック
+------------------------------
+
+Q1. package.json を開いてください。
+このアプリを開発モードで起動するコマンドは何ですか。
+
+答え:
+npm run dev
+
+
+Q2. package.json を見てください。
+このアプリで使っている主な UI ライブラリは何ですか。
+
+答え:
+React です。
+Next.js は React を使うためのフレームワークです。
+
+
+Q3. package.json を見てください。
+TypeScript は dependencies と devDependencies のどちらに入っていますか。
+
+答え:
+devDependencies です。
+TypeScript は開発時の型チェックやビルドに使われるためです。
+
+
+Q4. app/page.tsx の先頭にある "use client" は何のためですか。
+
+答え:
+このファイルをブラウザ側で動く Client Component にするためです。
+useState、useEffect、localStorage、window などを使うために必要です。
+
+
+第2章: データ構造
+----------------
+
+Q5. EventItem 型はどのファイルで定義されていますか。
+
+答え:
+components/WeekGrid.tsx です。
+
+
+Q6. EventItem の dateKey はどのような形式の文字列ですか。
+
+答え:
+"YYYY-MM-DD" 形式です。
+例: "2026-05-05"
+
+
+Q7. startMin が 570 のとき、これは何時何分を表しますか。
+
+答え:
+9:30 です。
+570 = 9 * 60 + 30 です。
+
+
+Q8. 13:15 を startMin として表すと何になりますか。
+
+答え:
+795 です。
+13 * 60 + 15 = 795 です。
+
+
+Q9. 9:00 から 10:30 の予定を EventItem で表すとき、startMin と endMin は何になりますか。
+
+答え:
+startMin は 540、endMin は 630 です。
+
+
+Q10. label、description、urls の役割をそれぞれ説明してください。
+
+答え:
+label は予定タイトルです。
+description は予定メモです。
+urls は予定に紐づく URL の配列です。
+
+
+第3章: 画面の親子関係
+--------------------
+
+Q11. app/page.tsx の Home コンポーネントは、予定一覧をどの変数名で持っていますか。
+
+答え:
+items です。
+
+
+Q12. Home から予定一覧を受け取り、日付ごとの表示を作るコンポーネントは何ですか。
+
+答え:
+WeekGrid です。
+
+
+Q13. 1日分の列を担当するコンポーネントは何ですか。
+
+答え:
+DayColumn です。
+
+
+Q14. 1つの予定ブロックを担当するコンポーネントは何ですか。
+
+答え:
+EventBlock です。
+
+
+Q15. 次の親子関係を埋めてください。
+
+Home
+  -> ________
+      -> ________
+          -> ________
+
+答え:
+Home
+  -> WeekGrid
+      -> DayColumn
+          -> EventBlock
+
+
+第4章: 表示計算
+--------------
+
+Q16. EventBlock.tsx で、予定ブロックの上からの位置を表す変数名は何ですか。
+
+答え:
+top です。
+
+
+Q17. EventBlock.tsx で、予定ブロックの高さを表す変数名は何ですか。
+
+答え:
+height です。
+
+
+Q18. viewStartMin が 360、item.startMin が 540、pxPerMin が 1 のとき、top は何 px ですか。
+
+答え:
+180px です。
+(540 - 360) * 1 = 180 です。
+
+
+Q19. 予定が 9:00 から 10:00、pxPerMin が 1 のとき、height は何 px ですか。
+
+答え:
+60px です。
+
+
+Q20. pxPerMin が 2 のとき、60分の予定の height は何 px ですか。
+
+答え:
+120px です。
+60 * 2 = 120 です。
+
+
+第5章: 15分単位の丸め
+--------------------
+
+Q21. lib/time.ts にある snap 関数は何をしますか。
+
+答え:
+分数を指定された単位に丸めます。
+このアプリでは主に 15分単位にそろえるために使います。
+
+
+Q22. snap(62, 15) はいくつになりますか。
+
+答え:
+60 です。
+
+
+Q23. snap(68, 15) はいくつになりますか。
+
+答え:
+75 です。
+
+
+Q24. DayColumn.tsx で、空き時間をダブルクリックしたときに開始時刻を 15分単位へ丸める処理はどこにありますか。
+
+答え:
+addEventAtClientY 内の snap(rawMin, gridMin) です。
+
+
+Q25. EventBlock.tsx で、ドラッグ移動時に開始時刻を丸めている処理はどこにありますか。
+
+答え:
+onPointerDown 内の move 関数で、snap(rawStart, gridMin) を使っています。
+
+
+第6章: 保存と読み込み
+--------------------
+
+Q26. 予定を localStorage に保存する hook は何ですか。
+
+答え:
+useTimeboxingItems です。
+
+
+Q27. useTimeboxingItems.ts で、保存済みデータを読み込むために使っているブラウザ API は何ですか。
+
+答え:
+localStorage.getItem です。
+
+
+Q28. useTimeboxingItems.ts で、予定データを保存するために使っているブラウザ API は何ですか。
+
+答え:
+localStorage.setItem です。
+
+
+Q29. localStorage から読んだ JSON が正しいか確認する関数は何ですか。
+
+答え:
+parseEventItems です。
+
+
+Q30. parseEventItems はどのファイルにありますか。
+
+答え:
+lib/storage.ts です。
+
+
+第7章: JSON インポート、エクスポート
+----------------------------------
+
+Q31. app/page.tsx で JSON エクスポートのファイル名を作る関数は何ですか。
+
+答え:
+buildExportFilename です。
+
+
+Q32. JSON エクスポートでは、items をどの関数で文字列にしていますか。
+
+答え:
+JSON.stringify です。
+
+
+Q33. インポート時に、ファイルの中身を読むために使っているメソッドは何ですか。
+
+答え:
+file.text() です。
+
+
+Q34. インポートした JSON が不正なとき、画面には成功とエラーのどちらの状態が設定されますか。
+
+答え:
+エラーです。
+transferState に "error" が設定されます。
+
+
+第8章: 日付
+----------
+
+Q35. lib/date.ts の toDateKey は何をする関数ですか。
+
+答え:
+Date オブジェクトを "YYYY-MM-DD" 形式の文字列に変換します。
+
+
+Q36. lib/date.ts の parseDateKey は何をする関数ですか。
+
+答え:
+"YYYY-MM-DD" 形式の文字列を Date オブジェクトに変換します。
+
+
+Q37. addDays("2026-05-05", 1) は何を返す想定ですか。
+
+答え:
+"2026-05-06" です。
+
+
+Q38. useViewOptions.ts の visibleDateKeys は何日分の日付を作りますか。
+
+答え:
+31日分です。
+VISIBLE_DAY_COUNT が 31 です。
+
+
+第9章: アラーム
+--------------
+
+Q39. アラーム機能を担当する hook は何ですか。
+
+答え:
+useAlarm です。
+
+
+Q40. 通知を出すために使っているブラウザ API は何ですか。
+
+答え:
+Notification です。
+
+
+Q41. ビープ音を鳴らすために使っているブラウザ API は何ですか。
+
+答え:
+AudioContext です。
+
+
+Q42. 10:00 開始の予定で leadMin が 5 の場合、アラームは何時何分に鳴りますか。
+
+答え:
+9:55 です。
+
+
+第10章: コード変更の練習
+-----------------------
+
+Q43. 新規予定のデフォルト時間を 30分から 45分に変えるには、どのファイルのどの定数を変えますか。
+
+答え:
+app/page.tsx の DEFAULT_DURATION を 30 から 45 に変えます。
+
+
+Q44. 表示開始時刻の初期値を 6時から 7時に変えるには、どのファイルのどの state 初期値を変えますか。
+
+答え:
+hooks/useViewOptions.ts の useState(6) を useState(7) に変えます。
+
+
+Q45. 1分あたりのピクセル数の基本値を変えるには、どのファイルのどの値を見ればよいですか。
+
+答え:
+hooks/useViewOptions.ts の pxPerMin = 0.96 * (zoom / 100) を見ます。
+
+
+Q46. EventItem に color を追加したい場合、最低限どのあたりを確認する必要がありますか。
+
+答え:
+components/WeekGrid.tsx の EventItem 型、
+lib/storage.ts の sanitizeEventItem、
+予定詳細編集コンポーネント、
+components/week/EventBlock.tsx の表示処理を確認します。
+
+
+Q47. URL リンクの表示ラベルを "Link" から "Open" に変えたい場合、どのファイルを見ますか。
+
+答え:
+components/week/EventBlock.tsx です。
+
+
+Q48. 今日の日付列の背景色を変えたい場合、どのファイルを見ますか。
+
+答え:
+components/week/DayColumn.tsx の getColumnClass と、
+components/WeekGrid.tsx の getHeaderClass を見ます。
+
+
+第11章: 自力で考える問題
+----------------------
+
+Q49. なぜ startMin と endMin を "09:00" の文字列ではなく number で持っているのでしょうか。
+
+解答例:
+ドラッグ量や表示位置を計算しやすいからです。
+分数なら足し算、引き算、丸め処理が簡単です。
+
+
+Q50. なぜ localStorage に保存する前に JSON.stringify が必要なのでしょうか。
+
+解答例:
+localStorage は文字列しか保存できないためです。
+配列やオブジェクトを保存するには JSON 文字列に変換する必要があります。
+
+
+Q51. なぜ JSON インポート時に parseEventItems で検証する必要があるのでしょうか。
+
+解答例:
+壊れたファイルや想定外のデータをそのまま使うと、画面表示や計算が壊れる可能性があるからです。
+
+
+Q52. なぜ WeekGrid で items を日付ごとに分けてから DayColumn に渡しているのでしょうか。
+
+解答例:
+DayColumn は1日分の表示だけに集中できるからです。
+親の WeekGrid が日付分類を担当すると、子コンポーネントの役割が分かりやすくなります。
+
+
+Q53. なぜ EventBlock のドラッグ処理では pointermove と pointerup を window に登録しているのでしょうか。
+
+解答例:
+ドラッグ中にマウスや指が予定ブロックの外へ出ても、移動や終了を追跡できるようにするためです。
+
+
+Q54. なぜ Notification permission をユーザー操作で要求する必要があるのでしょうか。
+
+解答例:
+ブラウザの通知はユーザーの許可が必要だからです。
+勝手に通知を出せないようにブラウザが制限しています。
+
+
+第12章: ミニ課題
+----------------
+
+課題1.
+app/page.tsx を開いて DEFAULT_DURATION を探してください。
+この値がどこで WeekGrid に渡されているか確認してください。
+
+確認ポイント:
+DEFAULT_DURATION は defaultDurationMin として WeekGrid に渡されています。
+
+
+課題2.
+hooks/useViewOptions.ts を開いて、表示日数を 31日から 14日に変えるにはどこを変えるか探してください。
+
+確認ポイント:
+VISIBLE_DAY_COUNT を 31 から 14 に変えます。
+
+
+課題3.
+lib/time.ts の minToHHMM(75) が何を返すか考えてください。
+
+確認ポイント:
+"1:15" を返します。
+
+
+課題4.
+lib/storage.ts の isValidEventItem を読んでください。
+startMin が -1 の予定が不正になる理由を説明してください。
+
+確認ポイント:
+startMin < 0 の場合 false になるためです。
+
+
+課題5.
+EventBlock.tsx を読んでください。
+予定ブロックの最小表示高さはいくつですか。
+
+確認ポイント:
+18px です。
+Math.max(..., 18) が使われています。
+
+
+課題6.
+EventBlock.tsx を読んでください。
+http または https 以外の URL はリンクとして表示されますか。
+
+確認ポイント:
+表示されません。
+new URL で解析し、protocol が "http:" または "https:" のものだけを firstUrl としています。
+
+
+課題7.
+useAlarm.ts を読んでください。
+アラーム済みかどうかを記録している変数は何ですか。
+
+確認ポイント:
+firedRef です。
+Set<string> で fireKey を記録しています。
+
+
+課題8.
+app/page.tsx を読んでください。
+Escape キーを押したときに閉じる UI は何ですか。
+
+確認ポイント:
+settingsOpen と calendarOpen が false になります。
+つまり設定モーダルとカレンダーが閉じます。
+
+
+課題9.
+WeekGrid.tsx を読んでください。
+今日の現在時刻ラインが表示される条件を説明してください。
+
+確認ポイント:
+nowMin が null ではなく、viewStartMin 以上、viewEndMin 以下のときです。
+
+
+課題10.
+自分で小さな変更案を1つ考えてください。
+その変更には、どのファイルを触る必要があるかを書いてください。
+
+解答例:
+予定ブロックのリンク表示を "Link" から "Open" に変えたい。
+触るファイルは components/week/EventBlock.tsx。
+
