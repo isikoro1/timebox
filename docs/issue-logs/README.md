@@ -28,7 +28,7 @@ Each log should capture:
 - [Issue #34: Persist View Options](./issue-34-persist-view-options.md)
 - [Issue #36: Alarm Status and Test Controls](./issue-36-alarm-status-and-test-controls.md)
 - [Issue #38: Overlap Layout for Three or More Events](./issue-38-overlap-layout.md)
-- [Issue #43: ローカル生成物の扱い整理](./issue-43-local-artifacts.md)
+- [Issue #43: ローカル生成物の扱いを整理](./issue-43-local-artifacts.md)
 
 ## Japanese
 
@@ -39,3 +39,5 @@ Each log should capture:
 - 想定される原因
 - 採用した修正方針
 - 修正をどのように検証したか
+
+日本語のログや README は UTF-8 として保存します。
