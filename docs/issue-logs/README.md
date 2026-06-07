@@ -24,6 +24,7 @@ Each log should capture:
 - [Issue #21: Inline Day Count Controls](./issue-21-inline-day-count-controls.md)
 - [Issue #23: Date Navigation Calendar Controls](./issue-23-date-navigation-calendar-controls.md)
 - [Issue #27: Mobile Swipe Navigation](./issue-27-mobile-swipe-navigation.md)
+- [Issue #32: Logic Layer Tests](./issue-32-logic-tests.md)
 - [Issue #33: Split Home Component Responsibilities](./issue-33-home-component-split.md)
 - [Issue #34: Persist View Options](./issue-34-persist-view-options.md)
 - [Issue #36: Alarm Status and Test Controls](./issue-36-alarm-status-and-test-controls.md)
